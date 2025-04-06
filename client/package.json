@@ -1,0 +1,21 @@
+{
+    "name": "jim_gym",
+    "version": "0.0.1",
+    "type": "module",
+    "workspaces": ["../packages/*"],
+    "scripts": {
+        "dev": "bunx --bun vite dev"
+    },
+    "dependencies": {
+        "tailwindcss": "^4.0.14",
+        "tailwindcss-fluid-type": "workspace:*"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.0.14",
+        "@types/bun": "latest",
+        "ts-gleam": "^1.0.1",
+        "vite": "^6.2.2",
+        "vite-gleam": "^0.4.3"
+    },
+    "module": "index.ts"
+}
