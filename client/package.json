@@ -4,7 +4,7 @@
     "type": "module",
     "workspaces": ["../packages/*"],
     "scripts": {
-        "dev": "bunx --bun vite dev"
+        "dev": "bunx vite dev"
     },
     "dependencies": {
         "tailwindcss": "^4.0.14",
