@@ -8,7 +8,7 @@ import lustre/attribute.{attribute, class, id}
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import lustre/element/html.{
-  button, details, div, h3, section, summary, table, tbody, td, text, th, thead,
+  a, button, details, div, h1, h3, nav, section, summary, table, tbody, td, text,
   tr,
 }
 import lustre/event.{on_click}
@@ -20,7 +20,7 @@ pub type Msg {
   UpdateSession(GymSession)
   EndActiveSession
   UpdateSessionTemplates(List(SessionTemplate))
-  OnRouteChange(Route)
+  HandleRouteChange(Route)
 }
 
 pub type Route {
@@ -81,13 +81,15 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
         ]),
       ],
     ),
-    modem.init(on_route_change),
+    modem.init(handle_route_change),
   )
 }
 
-fn on_route_change(uri: Uri) -> Msg {
+fn handle_route_change(uri: Uri) -> Msg {
   case uri.path_segments(uri.path) {
-    _ -> OnRouteChange(Home)
+    [] -> HandleRouteChange(Home)
+    ["session"] -> HandleRouteChange(SessionPage)
+    _ -> HandleRouteChange(Home)
   }
 }
 
@@ -118,13 +120,13 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             None -> GymSession(date.today() |> date.to_rata_die, [], "")
           }),
         ),
-        effect.none(),
+        modem.replace("session", None, None),
       )
     }
     UpdateSessionTemplates(templates) -> {
       #(Model(..model, session_templates: templates), effect.none())
     }
-    OnRouteChange(route) -> {
+    HandleRouteChange(route) -> {
       #(Model(..model, current_route: route), effect.none())
     }
   }
@@ -153,57 +155,54 @@ pub fn view(model: Model) -> Element(Msg) {
 }
 
 fn view_home(model: Model) -> Element(Msg) {
-  html.section(
-    [class("mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6")],
-    [
-      html.h1([class("text-7xl font-bold col-span-6")], [text("💪🤸‍♂️🏋️")]),
-      html.section([class("subgrid-cols gap-4 col-span-6")], [
-        case model.current_session {
-          None ->
-            button(
-              [
-                class(
-                  "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
-                ),
-                attribute.attribute("popovertarget", "session-template-picker"),
-              ],
-              [text("Start")],
-            )
-          Some(_) ->
-            button(
-              [
-                class(
-                  "font-code p-1 font-[400] text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
-                ),
-                on_click(OnRouteChange(SessionPage)),
-              ],
-              [text("Session in Progress")],
-            )
-        },
-        button(
-          [
-            class(
-              "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
-            ),
-          ],
-          [text("Review")],
-        ),
-      ]),
-      html.section(
+  section([class("mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6")], [
+    h1([class("text-7xl font-bold col-span-6")], [text("💪🤸‍♂️🏋️")]),
+    section([class("subgrid-cols gap-4 col-span-6")], [
+      case model.current_session {
+        None ->
+          button(
+            [
+              class(
+                "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+              ),
+              attribute.attribute("popovertarget", "session-template-picker"),
+            ],
+            [text("Start")],
+          )
+        Some(_) ->
+          a(
+            [
+              class(
+                "block center font-code p-1 font-[400] text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+              ),
+              attribute.href("/session"),
+            ],
+            [text("Session in Progress")],
+          )
+      },
+      button(
         [
-          class("mt-16 bg-white p-2 max-h-[80vh] w-full overflow-y-auto"),
-          attribute("popover", ""),
-          id("session-template-picker"),
-        ],
-        [
-          div(
-            [class("flex flex-col gap-4")],
-            model.session_templates |> list.map(view_session_template_card),
+          class(
+            "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
           ),
         ],
+        [text("Review")],
       ),
-    ],
-  )
+    ]),
+    section(
+      [
+        class("mt-16 bg-white p-2 max-h-[80vh] w-full overflow-y-auto"),
+        attribute("popover", ""),
+        id("session-template-picker"),
+      ],
+      [
+        div(
+          [class("flex flex-col gap-4")],
+          model.session_templates |> list.map(view_session_template_card),
+        ),
+      ],
+    ),
+  ])
 }
 
 fn view_session_template_card(template: SessionTemplate) -> Element(Msg) {
@@ -285,20 +284,37 @@ fn view_session_template_card(template: SessionTemplate) -> Element(Msg) {
 }
 
 fn view_session_page(model: Model) -> Element(Msg) {
-  html.section(
-    [class("mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6")],
-    [
-      html.h1([class("text-7xl font-bold col-span-6")], [
-        text(case model.current_session {
-          None -> ""
-          Some(session) ->
-            session.emoji
-            <> " "
-            <> session.date |> date.from_rata_die |> date.format("dd MMM yy")
-        }),
-      ]),
-    ],
-  )
+  case model.current_session {
+    None ->
+      h1([class("text-7xl font-bold col-[main-start_/_main-end]")], [
+        text("No session 😣"),
+      ])
+    Some(session) -> {
+      section(
+        [class("mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6")],
+        [
+          h1([class("text-7xl font-bold col-span-5")], [
+            text(
+              session.emoji
+              <> " "
+              <> session.date
+              |> date.from_rata_die
+              |> date.format("dd MMM yy"),
+            ),
+          ]),
+          nav([class("text-3xl")], [a([attribute.href("/")], [text("🏡")])]),
+          section(
+            [class("col-span-6")],
+            session.exercises |> list.map(view_exercise_detail),
+          ),
+        ],
+      )
+    }
+  }
+}
+
+fn view_exercise_detail(exercise: Exercise) -> Element(Msg) {
+  html.article([class("flex flex-col")], [text(exercise.name)])
 }
 
 pub fn main() {
