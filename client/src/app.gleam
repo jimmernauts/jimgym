@@ -1,10 +1,11 @@
+import gleam/dict.{type Dict}
 import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/uri.{type Uri, Uri}
 import lustre
-import lustre/attribute.{attribute, class, id}
+import lustre/attribute.{attribute, class, id, type_}
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import lustre/element/html.{
@@ -17,10 +18,11 @@ import rada/date
 
 pub type Msg {
   StartNewSession(Option(SessionTemplate))
-  UpdateSession(GymSession)
+  RemoveSetFromCurrentSessionExercises(Int, String)
   EndActiveSession
   UpdateSessionTemplates(List(SessionTemplate))
   HandleRouteChange(Route)
+  ShowTimer(Int)
 }
 
 pub type Route {
@@ -48,7 +50,7 @@ pub type GymSession {
   GymSession(
     date: Int,
     // Rata die
-    exercises: List(ExerciseSet),
+    exercises: Dict(String, List(ExerciseSet)),
     emoji: String,
   )
 }
@@ -60,6 +62,7 @@ pub type Model {
     session_template_picker: Bool,
     past_sessions: List(GymSession),
     session_templates: List(SessionTemplate),
+    timer: Int,
   )
 }
 
@@ -88,6 +91,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
           ExerciseTemplate("Patrick Step", 3, 20, 0.0, 60),
         ]),
       ],
+      timer: 0,
     ),
     modem.init(handle_route_change),
   )
@@ -103,8 +107,28 @@ fn handle_route_change(uri: Uri) -> Msg {
 
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
-    UpdateSession(new_session) -> {
-      #(Model(..model, current_session: Some(new_session)), effect.none())
+    RemoveSetFromCurrentSessionExercises(index, name) -> {
+      #(
+        Model(..model, current_session: case model.current_session {
+          None -> None
+          Some(session) -> {
+            let new_exercises =
+              dict.upsert(session.exercises, name, fn(exercises) {
+                case exercises {
+                  Some(exercise_list) -> {
+                    exercise_list
+                    |> list.index_map(fn(exercise, i) { #(exercise, i) })
+                    |> list.filter(fn(pair) { pair.1 != index })
+                    |> list.map(fn(pair) { pair.0 })
+                  }
+                  None -> []
+                }
+              })
+            Some(GymSession(session.date, new_exercises, session.emoji))
+          }
+        }),
+        effect.none(),
+      )
     }
     EndActiveSession -> {
       #(
@@ -125,11 +149,13 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             Some(SessionTemplate(_name, emoji, exercises)) -> {
               GymSession(
                 date.today() |> date.to_rata_die,
-                exercises |> list.flat_map(convert_template_to_sets),
+                exercises
+                  |> list.map(convert_template_to_sets)
+                  |> dict.from_list,
                 emoji,
               )
             }
-            None -> GymSession(date.today() |> date.to_rata_die, [], "")
+            None -> GymSession(date.today() |> date.to_rata_die, dict.new(), "")
           }),
         ),
         modem.replace("session", None, None),
@@ -140,6 +166,9 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
     HandleRouteChange(route) -> {
       #(Model(..model, current_route: route), effect.none())
+    }
+    ShowTimer(seconds) -> {
+      #(Model(..model, timer: seconds), effect.none())
     }
   }
 }
@@ -318,8 +347,8 @@ fn view_session_page(model: Model) -> Element(Msg) {
           section(
             [class("col-span-6")],
             session.exercises
-            |> list.group(fn(exercise) -> exercise.name)
-            
+              |> dict.to_list
+              |> list.map(view_exercise_group),
           ),
         ],
       )
@@ -327,11 +356,42 @@ fn view_session_page(model: Model) -> Element(Msg) {
   }
 }
 
-fn view_exercise_group(Dict())
+fn view_exercise_group(group: #(String, List(ExerciseSet))) -> Element(Msg) {
+  html.article(
+    [class("flex flex-col border-1 border-b-uchu-yin")],
+    list.append(
+      [h3([class("text-3xl font-bold")], [text(group.0)])],
+      list.index_map(group.1, view_exercise_detail),
+    ),
+  )
+}
 
-fn view_exercise_detail(exercise: ExerciseSet) -> Element(Msg) {
-  html.article([class("flex flex-col")],
-  [text(exercise.name)])
+fn view_exercise_detail(exercise: ExerciseSet, index: Int) -> Element(Msg) {
+  div([class("contents")], [
+    html.label([], [text("Reps:")]),
+    html.input([
+      class(""),
+      type_("number"),
+      attribute.value(exercise.reps |> int.to_string),
+    ]),
+    html.label([], [text("Weight:")]),
+    html.input([
+      class(""),
+      type_("number"),
+      attribute("step", "0.5"),
+      attribute.value(exercise.weight |> float.to_string),
+    ]),
+    button([class(""), on_click(ShowTimer(exercise.rest))], [
+      text(exercise.rest |> int.to_string <> "s ⌛"),
+    ]),
+    button(
+      [
+        class(""),
+        on_click(RemoveSetFromCurrentSessionExercises(index, exercise.name)),
+      ],
+      [text("❎")],
+    ),
+  ])
 }
 
 pub fn main() {
@@ -339,14 +399,19 @@ pub fn main() {
   let assert Ok(_) = lustre.start(app, "#app", Nil)
 }
 
-fn convert_template_to_sets(template: ExerciseTemplate) -> List(ExerciseSet) {
-  list.repeat(
-    ExerciseSet(
-      name: template.name,
-      reps: template.reps,
-      weight: template.weight,
-      rest: template.rest,
+fn convert_template_to_sets(
+  template: ExerciseTemplate,
+) -> #(String, List(ExerciseSet)) {
+  #(
+    template.name,
+    list.repeat(
+      ExerciseSet(
+        name: template.name,
+        reps: template.reps,
+        weight: template.weight,
+        rest: template.rest,
+      ),
+      template.sets,
     ),
-    template.sets,
   )
 }
