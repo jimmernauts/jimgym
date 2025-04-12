@@ -28,19 +28,27 @@ pub type Route {
   SessionPage
 }
 
-pub type Exercise {
-  Exercise(name: String, sets: Int, reps: Int, weight: Float, rest: Int)
+pub type ExerciseTemplate {
+  ExerciseTemplate(name: String, sets: Int, reps: Int, weight: Float, rest: Int)
 }
 
 pub type SessionTemplate {
-  SessionTemplate(name: String, emoji: String, exercises: List(Exercise))
+  SessionTemplate(
+    name: String,
+    emoji: String,
+    exercises: List(ExerciseTemplate),
+  )
+}
+
+pub type ExerciseSet {
+  ExerciseSet(name: String, reps: Int, weight: Float, rest: Int)
 }
 
 pub type GymSession {
   GymSession(
     date: Int,
     // Rata die
-    exercises: List(Exercise),
+    exercises: List(ExerciseSet),
     emoji: String,
   )
 }
@@ -64,20 +72,20 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       past_sessions: [],
       session_templates: [
         SessionTemplate("Whole Body A", "💪", [
-          Exercise("Sled Drag", 5, 10, 20.0, 60),
-          Exercise("Sled Push", 5, 10, 20.0, 90),
-          Exercise("Bench Press", 3, 10, 20.0, 90),
-          Exercise("Rows", 3, 10, 20.0, 90),
+          ExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
+          ExerciseTemplate("Sled Push", 5, 10, 20.0, 90),
+          ExerciseTemplate("Bench Press", 3, 10, 20.0, 90),
+          ExerciseTemplate("Rows", 3, 10, 20.0, 90),
         ]),
         SessionTemplate("Whole Body B", "🏋️", [
-          Exercise("Sled Drag", 5, 10, 20.0, 60),
-          Exercise("Deadlifts", 3, 10, 20.0, 90),
-          Exercise("Pull-ups", 3, 10, 20.0, 90),
-          Exercise("Shoulder Press", 3, 10, 12.5, 90),
+          ExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
+          ExerciseTemplate("Deadlifts", 3, 10, 20.0, 90),
+          ExerciseTemplate("Pull-ups", 3, 10, 20.0, 90),
+          ExerciseTemplate("Shoulder Press", 3, 10, 12.5, 90),
         ]),
         SessionTemplate("Rehab", "🏃", [
-          Exercise("Sled Drag", 5, 10, 20.0, 60),
-          Exercise("Patrick Step", 3, 20, 0.0, 60),
+          ExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
+          ExerciseTemplate("Patrick Step", 3, 20, 0.0, 60),
         ]),
       ],
     ),
@@ -115,7 +123,11 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           ..model,
           current_session: Some(case template {
             Some(SessionTemplate(_name, emoji, exercises)) -> {
-              GymSession(date.today() |> date.to_rata_die, exercises, emoji)
+              GymSession(
+                date.today() |> date.to_rata_die,
+                exercises |> list.flat_map(convert_template_to_sets),
+                emoji,
+              )
             }
             None -> GymSession(date.today() |> date.to_rata_die, [], "")
           }),
@@ -305,7 +317,9 @@ fn view_session_page(model: Model) -> Element(Msg) {
           nav([class("text-3xl")], [a([attribute.href("/")], [text("🏡")])]),
           section(
             [class("col-span-6")],
-            session.exercises |> list.map(view_exercise_detail),
+            session.exercises
+            |> list.group(fn(exercise) -> exercise.name)
+            
           ),
         ],
       )
@@ -313,11 +327,26 @@ fn view_session_page(model: Model) -> Element(Msg) {
   }
 }
 
-fn view_exercise_detail(exercise: Exercise) -> Element(Msg) {
-  html.article([class("flex flex-col")], [text(exercise.name)])
+fn view_exercise_group(Dict())
+
+fn view_exercise_detail(exercise: ExerciseSet) -> Element(Msg) {
+  html.article([class("flex flex-col")],
+  [text(exercise.name)])
 }
 
 pub fn main() {
   let app = lustre.application(init, update, view)
   let assert Ok(_) = lustre.start(app, "#app", Nil)
+}
+
+fn convert_template_to_sets(template: ExerciseTemplate) -> List(ExerciseSet) {
+  list.repeat(
+    ExerciseSet(
+      name: template.name,
+      reps: template.reps,
+      weight: template.weight,
+      rest: template.rest,
+    ),
+    template.sets,
+  )
 }
