@@ -59,7 +59,6 @@ pub type Model {
   Model(
     current_route: Route,
     current_session: Option(GymSession),
-    session_template_picker: Bool,
     past_sessions: List(GymSession),
     session_templates: List(SessionTemplate),
     timer: Int,
@@ -71,7 +70,6 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
     Model(
       current_route: Home,
       current_session: None,
-      session_template_picker: False,
       past_sessions: [],
       session_templates: [
         SessionTemplate("Whole Body A", "💪", [
@@ -191,7 +189,27 @@ pub fn view(model: Model) -> Element(Msg) {
     font-industrial",
       ),
     ],
-    [page],
+    [
+      page,
+      //todo: make the timer count down
+      case model.timer {
+        0 -> element.none()
+        _ ->
+          section(
+            [
+              class("mt-16 bg-white p-2 h-[80vh] w-full absolute z-10"),
+              id("timer"),
+            ],
+            [
+              div([class("flex flex-col gap-4 justify-center items-center")], [
+                h1([class("text-7xl font-bold")], [
+                  text(model.timer |> int.to_string),
+                ]),
+              ]),
+            ],
+          )
+      },
+    ],
   )
 }
 
