@@ -11,7 +11,7 @@ export default {
 			// works only with unitless numbers
 			// This numbers are the defaults settings
 			settings: {
-				fontSizeMin: 1.125, // 1.125rem === 18px
+				fontSizeMin: 1, // 1.125rem === 18px
 				fontSizeMax: 1.25, // 1.25rem === 20px
 				ratioMin: 1.125, // Multiplicator Min
 				ratioMax: 1.2, // Multiplicator Max

@@ -8,7 +8,8 @@
     },
     "dependencies": {
         "tailwindcss": "^4.0.14",
-        "tailwindcss-fluid-type": "workspace:*"
+        "tailwindcss-fluid-type": "workspace:*",
+        "vite-plugin-inspect": "^11.0.1"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.14",
