@@ -1,4 +1,9 @@
-import gleam/dict.{type Dict}
+import common.{
+  type Exercise, type ExerciseTemplate, ExerciseRecord, GymSession,
+  SessionTemplate, SetsExercise, SetsExerciseTemplate, TimedExercise,
+  TimedExerciseTemplate,
+}
+import gleam/dict
 import gleam/float
 import gleam/int
 import gleam/javascript/promise.{type Promise}
@@ -22,12 +27,12 @@ import rada/date
 import review
 
 pub type Msg {
-  StartNewSession(Option(SessionTemplate))
+  StartNewSession(Option(common.SessionTemplate))
   RemoveSetFromCurrentSessionExercises(Int, String)
   EndActiveSession
-  SaveSession(GymSession)
-  RetrievedPastSessions(List(GymSession))
-  UpdateSessionTemplates(List(SessionTemplate))
+  SaveSession(common.GymSession)
+  RetrievedPastSessions(List(common.GymSession))
+  UpdateSessionTemplates(List(common.SessionTemplate))
   HandleRouteChange(Route)
   ShowTimer(Int)
   TimerTick
@@ -43,55 +48,12 @@ pub type Route {
   ReviewPage
 }
 
-pub type ExerciseTemplate {
-  SetsExerciseTemplate(
-    name: String,
-    sets: Int,
-    reps: Int,
-    weight: Float,
-    rest: Int,
-  )
-  TimedExerciseTemplate(name: String, duration: Int)
-}
-
-pub type SessionTemplate {
-  SessionTemplate(
-    name: String,
-    emoji: String,
-    exercises: List(ExerciseTemplate),
-  )
-}
-
-pub type Exercise {
-  SetsExercise(name: String, reps: Int, weight: Float, rest: Int)
-  TimedExercise(name: String, duration: Int)
-}
-
-pub type ExerciseRecord {
-  ExerciseRecord(
-    date: String,
-    name: String,
-    reps: Option(Int),
-    weight: Option(Float),
-    duration: Option(Int),
-  )
-}
-
-pub type GymSession {
-  GymSession(
-    date: Int,
-    // Rata die
-    exercises: Dict(String, List(Exercise)),
-    emoji: String,
-  )
-}
-
 pub type Model {
   Model(
     current_route: Route,
-    current_session: Option(GymSession),
-    past_sessions: List(GymSession),
-    session_templates: List(SessionTemplate),
+    current_session: Option(common.GymSession),
+    past_sessions: List(common.GymSession),
+    session_templates: List(common.SessionTemplate),
     timer: Int,
     timer_id: Option(global.TimerID),
     alarm_ringing: Bool,
@@ -143,8 +105,10 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       {
         retrieve_sessions()
         |> promise.map(result.unwrap(_, []))
-        |> promise.tap(RetrievedPastSessions)
-        effect.none()
+        |> promise.map({
+          use dispatch <- effect.from
+          dispatch(RetrievedPastSessions)
+        })
       },
     ]),
   )
@@ -180,7 +144,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                   None -> []
                 }
               })
-            Some(GymSession(session.date, new_exercises, session.emoji))
+            Some(common.GymSession(session.date, new_exercises, session.emoji))
           }
         }),
         effect.none(),
@@ -211,8 +175,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         Model(
           ..model,
           current_session: Some(case template {
-            Some(SessionTemplate(_name, emoji, exercises)) -> {
-              GymSession(
+            Some(common.SessionTemplate(_name, emoji, exercises)) -> {
+              common.GymSession(
                 date.today() |> date.to_rata_die,
                 exercises
                   |> list.map(convert_template_to_sets)
@@ -419,7 +383,7 @@ fn view_home(model: Model) -> Element(Msg) {
             "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
           ),
         ],
-        [text("Review")],
+        [a([attribute.href("/review")], [text("Review")])],
       ),
     ]),
     section(
@@ -438,7 +402,7 @@ fn view_home(model: Model) -> Element(Msg) {
   ])
 }
 
-fn view_session_template_card(template: SessionTemplate) -> Element(Msg) {
+fn view_session_template_card(template: common.SessionTemplate) -> Element(Msg) {
   details(
     [class("bg-white border-2 border-uchu-yin rounded-md overflow-hidden")],
     [
@@ -660,12 +624,12 @@ pub fn do_stop_audio(audio: audio.Audio) -> Nil
 
 //-----DB --------------------------------------------------------------------------
 
-fn flatten_session(session: GymSession) -> List(ExerciseRecord) {
+fn flatten_session(session: common.GymSession) -> List(common.ExerciseRecord) {
   dict.values(session.exercises)
   |> list.flatten
   |> list.map(fn(exercise) {
     case exercise {
-      SetsExercise(name, reps, weight, rest) ->
+      SetsExercise(name, reps, weight, _rest) ->
         ExerciseRecord(
           date: session.date |> date.from_rata_die |> date.to_iso_string,
           name: name,
@@ -686,8 +650,8 @@ fn flatten_session(session: GymSession) -> List(ExerciseRecord) {
 }
 
 fn group_records_into_sessions(
-  records: List(ExerciseRecord),
-) -> List(GymSession) {
+  records: List(common.ExerciseRecord),
+) -> List(common.GymSession) {
   records
   |> list.group(fn(record) { record.date })
   |> dict.map_values(fn(date, inner_records) {
@@ -700,13 +664,13 @@ fn group_records_into_sessions(
         |> list.map(fn(record) {
           case record.duration {
             None ->
-              SetsExercise(
+              common.SetsExercise(
                 record.name,
                 option.unwrap(record.reps, 0),
                 option.unwrap(record.weight, 0.0),
                 rest: 0,
               )
-            Some(duration) -> TimedExercise(record.name, duration)
+            Some(duration) -> common.TimedExercise(record.name, duration)
           }
         })
         |> list.group(fn(exercise) { exercise.name }),
@@ -716,21 +680,32 @@ fn group_records_into_sessions(
   |> dict.values
 }
 
-fn save_session(session: GymSession) -> Promise(Result(Nil, String)) {
+fn save_session(session: common.GymSession) -> Promise(Result(Nil, String)) {
   session |> flatten_session |> do_insert_exercise_records
 }
 
 @external(javascript, "./db.ffi.mjs", "do_insert_exercise_records")
 pub fn do_insert_exercise_records(
-  records: List(ExerciseRecord),
+  records: List(common.ExerciseRecord),
 ) -> Promise(Result(Nil, String))
 
-fn retrieve_sessions() -> Promise(Result(List(GymSession), String)) {
+fn retrieve_sessions() -> Promise(Result(List(common.GymSession), String)) {
   do_retrieve_exercise_records()
   |> promise.map(result.map(_, group_records_into_sessions))
 }
 
 @external(javascript, "./db.ffi.mjs", "do_retrieve_exercise_records")
 pub fn do_retrieve_exercise_records() -> Promise(
-  Result(List(ExerciseRecord), String),
+  Result(List(common.ExerciseRecord), String),
+)
+
+pub fn retrieve_days_with_past_sessions() -> Promise(
+  Result(List(date.Date), String),
+) {
+  do_retrieve_days_with_past_sessions()
+}
+
+@external(javascript, "./db.ffi.mjs", "do_retrieve_days_with_past_sessions")
+pub fn do_retrieve_days_with_past_sessions() -> Promise(
+  Result(List(date.Date), String),
 )

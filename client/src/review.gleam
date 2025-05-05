@@ -1,12 +1,10 @@
 import gleam/int
-import gleam/javascript/promise.{type Promise}
 import gleam/list
-import gleam/result
 import gleam/string
 import lustre/attribute.{class, type_}
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
-import lustre/element/html.{button, section, text}
+import lustre/element/html.{section, text}
 import lustre/event.{on_click}
 import rada/date
 
@@ -47,45 +45,57 @@ pub fn update(
 // ----- VIEW -----------------------------------------------------------------------
 
 pub fn view_session_review(model: ReviewModel) -> Element(ReviewMsg) {
-  section([class("col-span-6 grid-cols-7 gap-1 border-1 border-uchu-yin p-1")], [
-    html.article([class("col-span-7 row-span-1")], [
-      text(
-        model.current_month |> string.inspect
-        <> " "
-        <> model.current_year |> int.to_string,
-      ),
-    ]),
-    generate_days_in_month(model.current_month, model.current_year)
-      |> list.map(view_calendar_day)
-      |> element.fragment,
-    html.nav([class("col-span-7 row-span-1")], [
-      html.button(
-        [
-          class("col-span-1 col-start-1"),
-          type_("button"),
-          on_click(
-            ChangedMonth(prev_month(model.current_month, model.current_year)),
+  section(
+    [class("grid-cols-7 grid gap-1 border-1 border-uchu-yin p-1")],
+    [
+      [
+        html.article([class("col-span-7 flex row-span-1 justify-center")], [
+          html.p([], [
+            text(
+              model.current_month |> string.inspect
+              <> " "
+              <> model.current_year |> int.to_string,
+            ),
+          ]),
+        ]),
+      ],
+      ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        |> list.map(fn(day) {
+          html.article([class("col-span-1 row-start-2")], [text(day)])
+        }),
+      generate_calendar_tiles(model.current_month, model.current_year),
+      [
+        html.nav([class("col-span-7 subgrid-cols row-span-1")], [
+          html.button(
+            [
+              class("col-span-1 col-start-1"),
+              type_("button"),
+              on_click(
+                ChangedMonth(prev_month(model.current_month, model.current_year)),
+              ),
+            ],
+            [text("<")],
           ),
-        ],
-        [text("<")],
-      ),
-      html.button(
-        [
-          class("col-span-1 col-start-7"),
-          type_("button"),
-          on_click(
-            ChangedMonth(next_month(model.current_month, model.current_year)),
+          html.button(
+            [
+              class("col-span-1 col-start-7"),
+              type_("button"),
+              on_click(
+                ChangedMonth(next_month(model.current_month, model.current_year)),
+              ),
+            ],
+            [text(">")],
           ),
-        ],
-        [text(">")],
-      ),
-    ]),
-  ])
+        ]),
+      ],
+    ]
+      |> list.flatten,
+  )
 }
 
 pub fn generate_days_in_month(month: date.Month, year: Int) -> List(date.Date) {
-  let start = date.from_calendar_date(year, month, 1)
-  let end = start |> date.ceiling(date.Month)
+  let start = date.from_calendar_date(year, month, 1) |> echo
+  let end = start |> date.add(1, date.Months) |> echo
   date.range(date.Day, 1, start, end)
 }
 
@@ -103,22 +113,69 @@ pub fn prev_month(month: date.Month, year: Int) -> #(date.Month, Int) {
   }
 }
 
-pub fn view_calendar_day(day: date.Date) -> Element(ReviewMsg) {
-  html.article([class("col-span-1 row-span-1")], [
-    text(day |> date.day |> int.to_string),
-  ])
+pub fn view_calendar_day(
+  day: date.Date,
+  starting_column: String,
+  has_session: Bool,
+) -> Element(ReviewMsg) {
+  html.article(
+    [
+      attribute.class("col-span-1 flex justify-center flex-col"),
+      {
+        case starting_column {
+          "" -> attribute.none()
+          _ -> attribute.style([#("grid-column-start", starting_column)])
+        }
+      },
+    ],
+    [
+      html.div([class("flex justify-center")], [
+        text(day |> date.day |> int.to_string),
+      ]),
+      case has_session {
+        True -> html.div([class("flex justify-center")], [text("🔸")])
+        False -> element.none()
+      },
+    ],
+  )
 }
-// ----- DB -----------------------------------------------------------------------
-// 
-// pub fn retrieve_days_with_past_sessions(
-//   month: date.Month,
-//   year: Int,
-// ) -> Promise(Result(List(date.Date), String)) {
-//   do_retrieve_days_with_past_sessions(month, year)
-// }
-// 
-// @external(javascript, "./db.ffi.mjs", "do_retrieve_days_with_past_sessions")
-// pub fn do_retrieve_days_with_past_sessions(
-//   month: date.Month,
-//   year: Int,
-// ) -> Promise(Result(List(date.Date), String))
+
+pub fn generate_calendar_tiles(
+  month: date.Month,
+  year: Int,
+) -> List(Element(ReviewMsg)) {
+  let days = generate_days_in_month(month, year)
+  case days {
+    [] -> []
+    [first, ..rest] -> {
+      let number = first |> date.weekday_number
+
+      list.flatten([
+        [
+          html.article(
+            [
+              attribute.style([
+                #(
+                  "grid-column",
+                  "span "
+                    <> number - 1 |> int.to_string
+                    <> " / span "
+                    <> number - 1 |> int.to_string,
+                ),
+              ]),
+            ],
+            [],
+          ),
+        ],
+        [
+          first
+          |> view_calendar_day(
+            "col-start-" <> number |> int.to_string <> " row-start-3",
+            False,
+          ),
+        ],
+        rest |> list.map(fn(day) { view_calendar_day(day, "", False) }),
+      ])
+    }
+  }
+}
