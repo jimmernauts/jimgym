@@ -46,16 +46,3 @@ export async function do_retrieve_exercise_records() {
     })
     return new Ok(List.fromArray(return_records))
 }
-
-export async function do_retrieve_days_with_past_sessions() {
-    const { data, error } = await supabase.from('exercise_records').select('date').distinct()
-    if (error) {
-        console.error(error)
-        return new GError(error)
-    }
-    let return_records = []
-    for (let record of data) {
-        return_records.push(record.date)
-    }
-    return new Ok(List.fromArray(return_records))
-}

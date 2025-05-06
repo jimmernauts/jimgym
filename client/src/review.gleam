@@ -1,16 +1,17 @@
+import gleam/function
 import gleam/int
 import gleam/list
+import gleam/result
 import gleam/string
-import lustre/attribute.{class, type_}
+import lustre/attribute.{class, href, type_}
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
-import lustre/element/html.{section, text}
+import lustre/element/html.{a, article, div, section, text}
 import lustre/event.{on_click}
 import rada/date
 
 pub type ReviewMsg {
   ChangedMonth(#(date.Month, Int))
-  RetrievedPastSessionDates(List(date.Date))
 }
 
 pub type ReviewModel {
@@ -28,16 +29,8 @@ pub fn update(
   case msg {
     ChangedMonth(#(month, year)) -> {
       #(ReviewModel(..model, current_month: month, current_year: year), {
-        // 
-        // retrieve_days_with_past_sessions(month, year)
-        // |> promise.map(result.unwrap(_, []))
-        // |> promise.tap(RetrievedPastSessionDates)
-        // effect.none()
         effect.none()
       })
-    }
-    RetrievedPastSessionDates(dates) -> {
-      #(ReviewModel(..model, past_session_dates: dates), effect.none())
     }
   }
 }
@@ -61,9 +54,15 @@ pub fn view_session_review(model: ReviewModel) -> Element(ReviewMsg) {
       ],
       ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
         |> list.map(fn(day) {
-          html.article([class("col-span-1 row-start-2")], [text(day)])
+          html.article([class("col-span-1 row-start-2 flex justify-center")], [
+            text(day),
+          ])
         }),
-      generate_calendar_tiles(model.current_month, model.current_year),
+      generate_calendar_tiles(
+        model.current_month,
+        model.current_year,
+        model.past_session_dates,
+      ),
       [
         html.nav([class("col-span-7 subgrid-cols row-span-1")], [
           html.button(
@@ -118,9 +117,9 @@ pub fn view_calendar_day(
   starting_column: String,
   has_session: Bool,
 ) -> Element(ReviewMsg) {
-  html.article(
+  article(
     [
-      attribute.class("col-span-1 flex justify-center flex-col"),
+      class("col-span-1 grid grid-rows-2 justify-center"),
       {
         case starting_column {
           "" -> attribute.none()
@@ -129,20 +128,29 @@ pub fn view_calendar_day(
       },
     ],
     [
-      html.div([class("flex justify-center")], [
+      div([class("row-start-1 flex justify-center")], [
         text(day |> date.day |> int.to_string),
       ]),
-      case has_session {
-        True -> html.div([class("flex justify-center")], [text("🔸")])
-        False -> element.none()
-      },
+      div([class("row-start-2 flex justify-center")], [
+        case has_session {
+          True -> text("💪")
+          False -> text(" ")
+        },
+      ]),
     ],
   )
+  |> case has_session {
+    True -> fn(inner) {
+      a([href("/session/" <> day |> date.to_iso_string)], [inner])
+    }
+    False -> function.identity
+  }
 }
 
 pub fn generate_calendar_tiles(
   month: date.Month,
   year: Int,
+  sessions: List(date.Date),
 ) -> List(Element(ReviewMsg)) {
   let days = generate_days_in_month(month, year)
   case days {
@@ -152,29 +160,44 @@ pub fn generate_calendar_tiles(
 
       list.flatten([
         [
-          html.article(
-            [
-              attribute.style([
-                #(
-                  "grid-column",
-                  "span "
-                    <> number - 1 |> int.to_string
-                    <> " / span "
-                    <> number - 1 |> int.to_string,
-                ),
-              ]),
-            ],
-            [],
-          ),
+          case number {
+            1 -> element.none()
+            _ ->
+              html.article(
+                [
+                  attribute.style([
+                    #(
+                      "grid-column",
+                      "span "
+                        <> number - 1 |> int.to_string
+                        <> " / span "
+                        <> number - 1 |> int.to_string,
+                    ),
+                  ]),
+                ],
+                [],
+              )
+          },
         ],
         [
-          first
-          |> view_calendar_day(
-            "col-start-" <> number |> int.to_string <> " row-start-3",
-            False,
-          ),
+          {
+            first
+            |> view_calendar_day(
+              "col-start-" <> number |> int.to_string <> " row-start-3",
+              list.find(sessions, fn(session) { session == first })
+                |> result.is_ok,
+            )
+          },
         ],
-        rest |> list.map(fn(day) { view_calendar_day(day, "", False) }),
+        rest
+          |> list.map(fn(day) {
+            view_calendar_day(
+              day,
+              "",
+              list.find(sessions, fn(session) { session == day })
+                |> result.is_ok,
+            )
+          }),
       ])
     }
   }

@@ -1,5 +1,6 @@
 import gleam/dict.{type Dict}
 import gleam/option.{type Option}
+import rada/date
 
 pub type ExerciseTemplate {
   SetsExerciseTemplate(
@@ -37,7 +38,7 @@ pub type ExerciseRecord {
 
 pub type GymSession {
   GymSession(
-    date: Int,
+    date: date.Date,
     // Rata die
     exercises: Dict(String, List(Exercise)),
     emoji: String,

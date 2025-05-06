@@ -100,17 +100,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
         current_year: date.year(date.today()),
       ),
     ),
-    effect.batch([
-      modem.init(handle_route_change),
-      {
-        retrieve_sessions()
-        |> promise.map(result.unwrap(_, []))
-        |> promise.map({
-          use dispatch <- effect.from
-          dispatch(RetrievedPastSessions)
-        })
-      },
-    ]),
+    modem.init(handle_route_change),
   )
 }
 
@@ -177,14 +167,14 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           current_session: Some(case template {
             Some(common.SessionTemplate(_name, emoji, exercises)) -> {
               common.GymSession(
-                date.today() |> date.to_rata_die,
+                date.today(),
                 exercises
                   |> list.map(convert_template_to_sets)
                   |> dict.from_list,
                 emoji,
               )
             }
-            None -> GymSession(date.today() |> date.to_rata_die, dict.new(), "")
+            None -> GymSession(date.today(), dict.new(), "")
           }),
         ),
         modem.replace("session", None, None),
@@ -196,11 +186,13 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     HandleRouteChange(route) -> {
       #(Model(..model, current_route: route), {
         case route {
-          Home -> {
+          Home -> effect.none()
+          ReviewPage -> {
+            use dispatch <- effect.from
             retrieve_sessions()
             |> promise.map(result.unwrap(_, []))
-            |> promise.tap(RetrievedPastSessions)
-            effect.none()
+            |> promise.tap(fn(x) { dispatch(RetrievedPastSessions(x)) })
+            Nil
           }
           _ -> effect.none()
         }
@@ -270,7 +262,18 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(model, effect.none())
     }
     RetrievedPastSessions(past_sessions) -> {
-      #(Model(..model, past_sessions: past_sessions), effect.none())
+      #(
+        Model(
+          ..model,
+          past_sessions: past_sessions,
+          review_model: review.ReviewModel(
+            date.month(date.today()),
+            date.year(date.today()),
+            past_sessions |> list.map(fn(session) { session.date }),
+          ),
+        ),
+        effect.none(),
+      )
     }
     Review(review_msg) -> {
       let #(review_model, effect) =
@@ -508,7 +511,6 @@ fn view_session_page(model: Model) -> Element(Msg) {
               session.emoji
               <> " "
               <> session.date
-              |> date.from_rata_die
               |> date.format("dd MMM yy"),
             ),
           ]),
@@ -631,7 +633,7 @@ fn flatten_session(session: common.GymSession) -> List(common.ExerciseRecord) {
     case exercise {
       SetsExercise(name, reps, weight, _rest) ->
         ExerciseRecord(
-          date: session.date |> date.from_rata_die |> date.to_iso_string,
+          date: session.date |> date.to_iso_string,
           name: name,
           reps: Some(reps),
           weight: Some(weight),
@@ -639,7 +641,7 @@ fn flatten_session(session: common.GymSession) -> List(common.ExerciseRecord) {
         )
       TimedExercise(name, duration) ->
         ExerciseRecord(
-          date: session.date |> date.from_rata_die |> date.to_iso_string,
+          date: session.date |> date.to_iso_string,
           name: name,
           reps: None,
           weight: None,
@@ -658,8 +660,7 @@ fn group_records_into_sessions(
     GymSession(
       date: date
         |> date.from_iso_string
-        |> result.map(date.to_rata_die)
-        |> result.unwrap(0),
+        |> result.unwrap(date.from_calendar_date(1970, date.Jan, 1)),
       exercises: inner_records
         |> list.map(fn(record) {
           case record.duration {
@@ -697,15 +698,4 @@ fn retrieve_sessions() -> Promise(Result(List(common.GymSession), String)) {
 @external(javascript, "./db.ffi.mjs", "do_retrieve_exercise_records")
 pub fn do_retrieve_exercise_records() -> Promise(
   Result(List(common.ExerciseRecord), String),
-)
-
-pub fn retrieve_days_with_past_sessions() -> Promise(
-  Result(List(date.Date), String),
-) {
-  do_retrieve_days_with_past_sessions()
-}
-
-@external(javascript, "./db.ffi.mjs", "do_retrieve_days_with_past_sessions")
-pub fn do_retrieve_days_with_past_sessions() -> Promise(
-  Result(List(date.Date), String),
 )
