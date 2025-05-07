@@ -63,9 +63,19 @@ pub type Model {
 }
 
 fn init(_flags) -> #(Model, Effect(Msg)) {
+  let initial_route =
+    modem.initial_uri()
+    |> result.map(handle_route_change)
+    |> result.map(fn(x) {
+      case x {
+        HandleRouteChange(route) -> route
+        _ -> Home
+      }
+    })
+    |> result.unwrap(Home)
   #(
     Model(
-      current_route: Home,
+      current_route: initial_route,
       sessions: [],
       session_templates: [
         SessionTemplate("Whole Body A", "💪", [
@@ -293,23 +303,30 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   }
 }
 
+//--PAGES------------------------------------------------------------------------
+
 pub fn view(model: Model) -> Element(Msg) {
+  let is_todays_session = case model.current_route {
+    SessionPage(date) -> date == date.today()
+    _ -> False
+  }
   let page = case model.current_route {
     Home -> view_home(model)
     SessionPage(date) -> view_session_page(model, date)
     ReviewPage ->
-      element.map(review.view_session_review(model.review_model), Review)
+      review.view_session_review(model.review_model)
+      |> list.map(element.map(_, Review))
   }
   html.main(
     [
       class(
-        "grid ml-2 mr-2 gap-2
+        "h-screen grid p-2 gap-2
     2xl:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_90%_[main-end]_3fr_[full-end]_1fr_[end]]
     xl:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_95%_[main-end]_3fr_[full-end]_1fr_[end]]
     lg:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_95%_[main-end]_3fr_[full-end]_1fr_[end]]
     md:grid-cols-[[start_full-start]_1fr_[main-start]_95%_[main-end]_1fr_[full-end_end]]
     grid-cols-[[start_full-start_main-start]_100%_[main-end_full-end_end]]
-    grid-rows-[[content]_95%_[footer]_1fr]
+    grid-rows-[[header]_1fr_[content]_8fr_[footer]_1fr]
     font-industrial",
       ),
       {
@@ -319,9 +336,8 @@ pub fn view(model: Model) -> Element(Msg) {
         }
       },
     ],
-    [
-      page,
-      case model.timer_id, model.alarm_ringing {
+    page
+      |> list_append_one(case model.timer_id, model.alarm_ringing {
         None, _ -> element.none()
         Some(_), False ->
           section(
@@ -359,48 +375,78 @@ pub fn view(model: Model) -> Element(Msg) {
               ),
             ],
           )
-      },
-    ],
+      })
+      |> list_append_one(
+        nav(
+          [
+            class(
+              "row-start-[footer] col-span-6 text-2xl p-4 border-t-1 border-uchu-yin gap-6 flex justify-around flex-row",
+            ),
+          ],
+          [
+            a([attribute.href("/"), class("self-center")], [text("🏡")]),
+            {
+              use <- bool.guard(!is_todays_session, element.none())
+              button(
+                [
+                  class("self-center cursor-pointer"),
+                  on_click(EndActiveSession),
+                ],
+                [text("🚩")],
+              )
+            },
+          ],
+        ),
+      ),
   )
 }
 
-fn view_home(model: Model) -> Element(Msg) {
-  section([class("mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6")], [
-    h1([class("text-7xl font-bold col-span-6")], [text("💪🤸‍♂️🏋️")]),
-    section([class("subgrid-cols gap-4 col-span-6")], [
-      case
-        list.find(model.sessions, fn(session) { session.date == date.today() })
-      {
-        Error(_) ->
-          button(
-            [
-              class(
-                "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
-              ),
-              attribute.attribute("popovertarget", "session-template-picker"),
-            ],
-            [text("Start")],
-          )
-        Ok(_) ->
-          a(
-            [
-              class(
-                "block center font-code p-1 font-[400] text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
-              ),
-              attribute.href("/session"),
-            ],
-            [text("Session in Progress")],
-          )
-      },
-      button(
-        [
-          class(
-            "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
-          ),
-        ],
-        [a([attribute.href("/review")], [text("Review")])],
-      ),
+fn view_home(model: Model) -> List(Element(Msg)) {
+  [
+    h1([class("text-7xl font-bold col-span-6 row-start-[header]")], [
+      text("💪🤸‍♂️🏋️"),
     ]),
+    section(
+      [
+        class(
+          "mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6 grid-rows-4 row-start-[content]",
+        ),
+      ],
+      [
+        case
+          list.find(model.sessions, fn(session) { session.date == date.today() })
+        {
+          Error(_) ->
+            button(
+              [
+                class(
+                  "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+                ),
+                attribute.attribute("popovertarget", "session-template-picker"),
+              ],
+              [text("Start")],
+            )
+          Ok(_) ->
+            a(
+              [
+                class(
+                  "block center font-code p-1 font-[400] text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+                ),
+                attribute.href("/session/current"),
+              ],
+              [text("Session in Progress")],
+            )
+        },
+        button(
+          [
+            class(
+              "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+            ),
+          ],
+          [a([attribute.href("/review")], [text("Review")])],
+        ),
+      ],
+    ),
     section(
       [
         class("mt-16 bg-white p-2 row-start-2 h-full w-full overflow-y-auto"),
@@ -414,8 +460,45 @@ fn view_home(model: Model) -> Element(Msg) {
         ),
       ],
     ),
-  ])
+  ]
 }
+
+fn view_session_page(model: Model, date: date.Date) -> List(Element(Msg)) {
+  case
+    list.find(model.sessions, fn(session) { session.date == date }),
+    date == date.today()
+  {
+    Error(_), _ -> [
+      h1([class("text-7xl font-bold col-[main-start_/_main-end]")], [
+        text("No session 😣"),
+      ]),
+    ]
+    Ok(session), is_today -> {
+      [
+        h1([class("text-7xl row-start-[header] font-bold col-span-5")], [
+          text(
+            session.emoji
+            <> " "
+            <> session.date
+            |> date.format("dd MMM yy"),
+          ),
+        ]),
+        section(
+          [
+            class(
+              "mt-4 row-start-[content] overflow-y-scroll gap-6 grid col-[main-start_/_main-end] subgrid-rows grid-cols-6",
+            ),
+          ],
+          session.exercises
+            |> dict.to_list
+            |> list.map(view_exercise_group(_, is_today)),
+        ),
+      ]
+    }
+  }
+}
+
+//--VIEW HELPERS------------------------------------------------------------------
 
 fn view_session_template_card(template: common.SessionTemplate) -> Element(Msg) {
   details(
@@ -451,7 +534,7 @@ fn view_session_template_card(template: common.SessionTemplate) -> Element(Msg) 
         button(
           [
             class(
-              "mt-4 w-full p-2 bg-uchu-light-gray border border-uchu-yin rounded-md",
+              "mt-4 w-full p-2 bg-uchu-light-gray border cursor-pointer border-uchu-yin rounded-md",
             ),
             on_click(StartNewSession(Some(template))),
           ],
@@ -506,48 +589,6 @@ fn view_set_exercise_row(
     ]),
     td([class("py-1 text-center")], [text(int.to_string(rest) <> "s")]),
   ])
-}
-
-fn view_session_page(model: Model, date: date.Date) -> Element(Msg) {
-  case
-    list.find(model.sessions, fn(session) { session.date == date }),
-    date == date.today()
-  {
-    Error(_), _ ->
-      h1([class("text-7xl font-bold col-[main-start_/_main-end]")], [
-        text("No session 😣"),
-      ])
-    Ok(session), is_today -> {
-      section(
-        [class("mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6")],
-        [
-          h1([class("text-7xl font-bold col-span-5")], [
-            text(
-              session.emoji
-              <> " "
-              <> session.date
-              |> date.format("dd MMM yy"),
-            ),
-          ]),
-          nav([class("text-2xl gap-2 flex justify-between flex-col")], [
-            a([attribute.href("/"), class("self-center")], [text("🏡")]),
-            {
-              use <- bool.guard(is_today, element.none())
-              button([class("self-center"), on_click(EndActiveSession)], [
-                text("🚩"),
-              ])
-            },
-          ]),
-          section(
-            [class("col-span-6 subgrid-cols row-start-2")],
-            session.exercises
-              |> dict.to_list
-              |> list.map(view_exercise_group(_, is_today)),
-          ),
-        ],
-      )
-    }
-  }
 }
 
 fn view_exercise_group(
@@ -739,3 +780,7 @@ fn retrieve_sessions() -> Promise(Result(List(common.GymSession), String)) {
 pub fn do_retrieve_exercise_records() -> Promise(
   Result(List(common.ExerciseRecord), String),
 )
+
+fn list_append_one(list: List(a), item: a) -> List(a) {
+  [item, ..list] |> list.reverse
+}
