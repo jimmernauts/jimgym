@@ -3,6 +3,7 @@ import common.{
   SessionTemplate, SetsExercise, SetsExerciseTemplate, TimedExercise,
   TimedExerciseTemplate,
 }
+import gleam/bool
 import gleam/dict
 import gleam/float
 import gleam/int
@@ -44,15 +45,14 @@ pub type Msg {
 
 pub type Route {
   Home
-  SessionPage
+  SessionPage(date.Date)
   ReviewPage
 }
 
 pub type Model {
   Model(
     current_route: Route,
-    current_session: Option(common.GymSession),
-    past_sessions: List(common.GymSession),
+    sessions: List(common.GymSession),
     session_templates: List(common.SessionTemplate),
     timer: Int,
     timer_id: Option(global.TimerID),
@@ -66,8 +66,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
   #(
     Model(
       current_route: Home,
-      current_session: None,
-      past_sessions: [],
+      sessions: [],
       session_templates: [
         SessionTemplate("Whole Body A", "💪", [
           SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 90),
@@ -79,7 +78,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
           SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
           SetsExerciseTemplate("Deadlifts", 3, 10, 20.0, 90),
           SetsExerciseTemplate("Pull-ups", 3, 10, 20.0, 90),
-          SetsExerciseTemplate("Shoulder Press", 3, 10, 12.5, 90),
+          SetsExerciseTemplate("Shoulder Press", 3, 8, 17.5, 90),
         ]),
         SessionTemplate("Rehab", "🏃", [
           SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
@@ -96,7 +95,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       alarm_audio: None,
       review_model: review.ReviewModel(
         current_month: date.month(date.today()),
-        past_session_dates: [],
+        session_dates: [],
         current_year: date.year(date.today()),
       ),
     ),
@@ -107,7 +106,11 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
 fn handle_route_change(uri: Uri) -> Msg {
   case uri.path_segments(uri.path) {
     [] -> HandleRouteChange(Home)
-    ["session"] -> HandleRouteChange(SessionPage)
+    ["session", "current"] -> HandleRouteChange(SessionPage(date.today()))
+    ["session", date] ->
+      HandleRouteChange(SessionPage(
+        date.from_iso_string(date) |> result.unwrap(date.today()),
+      ))
     ["review"] -> HandleRouteChange(ReviewPage)
     _ -> HandleRouteChange(Home)
   }
@@ -119,40 +122,47 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   case msg {
     RemoveSetFromCurrentSessionExercises(index, name) -> {
       #(
-        Model(..model, current_session: case model.current_session {
-          None -> None
-          Some(session) -> {
-            let new_exercises =
-              dict.upsert(session.exercises, name, fn(exercises) {
-                case exercises {
-                  Some(exercise_list) -> {
-                    exercise_list
-                    |> list.index_map(fn(exercise, i) { #(exercise, i) })
-                    |> list.filter(fn(pair) { pair.1 != index })
-                    |> list.map(fn(pair) { pair.0 })
+        Model(
+          ..model,
+          sessions: case
+            model.sessions
+            |> list.find(fn(session) { session.date == date.today() })
+          {
+            Error(_) -> model.sessions
+            Ok(session) -> {
+              let new_exercises =
+                dict.upsert(session.exercises, name, fn(exercises) {
+                  case exercises {
+                    Some(exercise_list) -> {
+                      exercise_list
+                      |> list.index_map(fn(exercise, i) { #(exercise, i) })
+                      |> list.filter(fn(pair) { pair.1 != index })
+                      |> list.map(fn(pair) { pair.0 })
+                    }
+                    None -> []
                   }
-                  None -> []
-                }
-              })
-            Some(common.GymSession(session.date, new_exercises, session.emoji))
-          }
-        }),
+                })
+              [
+                common.GymSession(session.date, new_exercises, session.emoji),
+                ..model.sessions
+              ]
+            }
+          },
+        ),
         effect.none(),
       )
     }
     EndActiveSession -> {
       #(
-        Model(..model, current_session: None, past_sessions: {
-          case model.current_session {
-            None -> model.past_sessions
-            Some(session) -> list.append(model.past_sessions, [session])
-          }
-        }),
+        model,
         effect.batch([
           modem.push("/", None, None),
-          case model.current_session {
-            None -> effect.none()
-            Some(session) -> {
+          case
+            model.sessions
+            |> list.find(fn(session) { session.date == date.today() })
+          {
+            Error(_) -> effect.none()
+            Ok(session) -> {
               use dispatch <- effect.from
               dispatch(SaveSession(session))
             }
@@ -162,9 +172,8 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
     StartNewSession(template) -> {
       #(
-        Model(
-          ..model,
-          current_session: Some(case template {
+        Model(..model, sessions: [
+          case template {
             Some(common.SessionTemplate(_name, emoji, exercises)) -> {
               common.GymSession(
                 date.today(),
@@ -175,9 +184,10 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
               )
             }
             None -> GymSession(date.today(), dict.new(), "")
-          }),
-        ),
-        modem.replace("session", None, None),
+          },
+          ..model.sessions
+        ]),
+        modem.replace("session/current", None, None),
       )
     }
     UpdateSessionTemplates(templates) -> {
@@ -265,7 +275,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(
         Model(
           ..model,
-          past_sessions: past_sessions,
+          sessions: past_sessions,
           review_model: review.ReviewModel(
             date.month(date.today()),
             date.year(date.today()),
@@ -286,7 +296,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 pub fn view(model: Model) -> Element(Msg) {
   let page = case model.current_route {
     Home -> view_home(model)
-    SessionPage -> view_session_page(model)
+    SessionPage(date) -> view_session_page(model, date)
     ReviewPage ->
       element.map(review.view_session_review(model.review_model), Review)
   }
@@ -358,8 +368,10 @@ fn view_home(model: Model) -> Element(Msg) {
   section([class("mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6")], [
     h1([class("text-7xl font-bold col-span-6")], [text("💪🤸‍♂️🏋️")]),
     section([class("subgrid-cols gap-4 col-span-6")], [
-      case model.current_session {
-        None ->
+      case
+        list.find(model.sessions, fn(session) { session.date == date.today() })
+      {
+        Error(_) ->
           button(
             [
               class(
@@ -369,7 +381,7 @@ fn view_home(model: Model) -> Element(Msg) {
             ],
             [text("Start")],
           )
-        Some(_) ->
+        Ok(_) ->
           a(
             [
               class(
@@ -496,13 +508,16 @@ fn view_set_exercise_row(
   ])
 }
 
-fn view_session_page(model: Model) -> Element(Msg) {
-  case model.current_session {
-    None ->
+fn view_session_page(model: Model, date: date.Date) -> Element(Msg) {
+  case
+    list.find(model.sessions, fn(session) { session.date == date }),
+    date == date.today()
+  {
+    Error(_), _ ->
       h1([class("text-7xl font-bold col-[main-start_/_main-end]")], [
         text("No session 😣"),
       ])
-    Some(session) -> {
+    Ok(session), is_today -> {
       section(
         [class("mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6")],
         [
@@ -516,15 +531,18 @@ fn view_session_page(model: Model) -> Element(Msg) {
           ]),
           nav([class("text-2xl gap-2 flex justify-between flex-col")], [
             a([attribute.href("/"), class("self-center")], [text("🏡")]),
-            button([class("self-center"), on_click(EndActiveSession)], [
-              text("🚩"),
-            ]),
+            {
+              use <- bool.guard(is_today, element.none())
+              button([class("self-center"), on_click(EndActiveSession)], [
+                text("🚩"),
+              ])
+            },
           ]),
           section(
             [class("col-span-6 subgrid-cols row-start-2")],
             session.exercises
               |> dict.to_list
-              |> list.map(view_exercise_group),
+              |> list.map(view_exercise_group(_, is_today)),
           ),
         ],
       )
@@ -532,12 +550,18 @@ fn view_session_page(model: Model) -> Element(Msg) {
   }
 }
 
-fn view_exercise_group(group: #(String, List(Exercise))) -> Element(Msg) {
+fn view_exercise_group(
+  group: #(String, List(Exercise)),
+  is_today: Bool,
+) -> Element(Msg) {
   html.article(
     [class("col-span-6 subgrid-cols border-1 border-b-uchu-yin")],
     list.append(
       [h3([class("col-span-6 text-3xl font-bold")], [text(group.0)])],
-      list.index_map(group.1, view_exercise_detail),
+      list.index_map(group.1, case is_today {
+        True -> view_exercise_detail
+        False -> view_exercise_history
+      }),
     ),
   )
 }
@@ -588,6 +612,22 @@ fn view_exercise_detail(exercise: Exercise, index: Int) -> Element(Msg) {
           ],
           [text("❎")],
         ),
+      ])
+  }
+}
+
+fn view_exercise_history(exercise: Exercise, _index: Int) -> Element(Msg) {
+  case exercise {
+    SetsExercise(name, reps, weight, _rest) ->
+      div([class("contents")], [
+        text(name),
+        text(reps |> int.to_string <> "x "),
+        text(weight |> float.to_string <> "kg"),
+      ])
+    TimedExercise(name, duration) ->
+      div([class("contents")], [
+        text(name),
+        text(duration |> int.to_string <> "m"),
       ])
   }
 }

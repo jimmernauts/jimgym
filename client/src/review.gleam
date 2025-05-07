@@ -18,7 +18,7 @@ pub type ReviewModel {
   ReviewModel(
     current_month: date.Month,
     current_year: Int,
-    past_session_dates: List(date.Date),
+    session_dates: List(date.Date),
   )
 }
 
@@ -61,7 +61,7 @@ pub fn view_session_review(model: ReviewModel) -> Element(ReviewMsg) {
       generate_calendar_tiles(
         model.current_month,
         model.current_year,
-        model.past_session_dates,
+        model.session_dates,
       ),
       [
         html.nav([class("col-span-7 subgrid-cols row-span-1")], [
