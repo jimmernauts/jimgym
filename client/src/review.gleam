@@ -1,12 +1,18 @@
+import common.{type GymSession}
+import gleam/dict
+import gleam/float
 import gleam/function
 import gleam/int
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import lustre/attribute.{class, href, type_}
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
-import lustre/element/html.{a, article, div, section, text}
+import lustre/element/html.{
+  a, article, div, h1, section, table, tbody, td, text, tr,
+}
 import lustre/event.{on_click}
 import rada/date
 
@@ -19,6 +25,7 @@ pub type ReviewModel {
     current_month: date.Month,
     current_year: Int,
     session_dates: List(date.Date),
+    selected_session: Option(GymSession),
   )
 }
 
@@ -102,6 +109,111 @@ pub fn view_session_review(model: ReviewModel) -> List(Element(ReviewMsg)) {
         |> list.flatten,
     ),
   ]
+}
+
+pub fn view_session_history(model: ReviewModel) -> List(Element(ReviewMsg)) {
+  case model.selected_session {
+    None -> [
+      h1([class("font-slab text-7xl font-bold col-[main-start_/_main-end]")], [
+        text("No session 😣"),
+      ]),
+    ]
+    Some(session) -> [
+      h1(
+        [
+          class(
+            "font-slab text-7xl row-start-[header] col-[main-start_/_main-end] font-bold",
+          ),
+        ],
+        [
+          text(
+            session.emoji
+            <> " "
+            <> session.date
+            |> date.format("dd MMM yy"),
+          ),
+        ],
+      ),
+      section(
+        [
+          class(
+            "mt-4 row-start-[content] overflow-y-scroll gap-6 grid col-[main-start_/_main-end] grid-cols-6",
+          ),
+        ],
+        [
+          table([class("w-full text-sm")], [
+            tbody(
+              [],
+              session.exercises
+                |> dict.values
+                |> list.map(view_exercise_history_group)
+                |> list.flatten,
+            ),
+          ]),
+        ],
+      ),
+    ]
+  }
+}
+
+pub fn view_exercise_history_group(
+  exercises: List(common.Exercise),
+) -> List(Element(ReviewMsg)) {
+  group_exercises_by_sets(exercises)
+  |> list.map(view_exercise_history)
+}
+
+pub fn view_exercise_history(
+  sets: #(Int, common.Exercise),
+) -> Element(ReviewMsg) {
+  case sets.1 {
+    common.SetsExercise(name, reps, weight, _rest) ->
+      tr([class("border-b border-gray-100")], [
+        td([class("py-1 text-center")], [
+          text(int.to_string(sets.0) <> "×" <> int.to_string(reps)),
+        ]),
+        td([class("py-1")], [text(name)]),
+        td([class("py-1 text-center")], [
+          text(case weight {
+            0.0 -> ""
+            weight -> {
+              // Check if it's effectively an integer
+              let int_part = float.truncate(weight)
+              let decimal_part = weight -. int.to_float(int_part)
+
+              case decimal_part <. 0.01 || decimal_part >. 0.99 {
+                True -> int.to_string(int_part) <> "kg"
+                False -> {
+                  // Format with one decimal place
+                  let decimal_str =
+                    decimal_part *. 10.0
+                    |> float.round
+                    |> int.to_string
+
+                  int.to_string(int_part) <> "." <> decimal_str <> "kg"
+                }
+              }
+            }
+          }),
+        ]),
+      ])
+    common.TimedExercise(name, duration) ->
+      div([class("col-span-6")], [
+        text(sets.0 |> int.to_string <> " sets "),
+        text(name),
+        text(duration |> int.to_string <> "m"),
+      ])
+  }
+}
+
+pub fn group_exercises_by_sets(exercises: List(common.Exercise)) {
+  let uniques = exercises |> list.unique
+  let counts =
+    uniques
+    |> list.map(fn(exercise) {
+      #(exercises |> list.count(fn(e) { e == exercise }), exercise)
+    })
+  counts
 }
 
 pub fn generate_days_in_month(month: date.Month, year: Int) -> List(date.Date) {

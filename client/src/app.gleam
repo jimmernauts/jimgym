@@ -45,8 +45,8 @@ pub type Msg {
 
 pub type Route {
   Home
-  SessionPage(date.Date)
-  ReviewPage
+  CurrentSessionPage
+  ReviewPage(Option(date.Date))
 }
 
 pub type Model {
@@ -107,6 +107,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
         current_month: date.month(date.today()),
         session_dates: [],
         current_year: date.year(date.today()),
+        selected_session: None,
       ),
     ),
     modem.init(handle_route_change),
@@ -116,12 +117,14 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
 fn handle_route_change(uri: Uri) -> Msg {
   case uri.path_segments(uri.path) {
     [] -> HandleRouteChange(Home)
-    ["session", "current"] -> HandleRouteChange(SessionPage(date.today()))
+    ["session", "current"] -> HandleRouteChange(CurrentSessionPage)
     ["session", date] ->
-      HandleRouteChange(SessionPage(
-        date.from_iso_string(date) |> result.unwrap(date.today()),
-      ))
-    ["review"] -> HandleRouteChange(ReviewPage)
+      HandleRouteChange(
+        ReviewPage(Some(
+          date.from_iso_string(date) |> result.unwrap(date.today()),
+        )),
+      )
+    ["review"] -> HandleRouteChange(ReviewPage(None))
     _ -> HandleRouteChange(Home)
   }
 }
@@ -207,7 +210,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(Model(..model, current_route: route), {
         case route {
           Home -> effect.none()
-          ReviewPage -> {
+          ReviewPage(_) -> {
             use dispatch <- effect.from
             retrieve_sessions()
             |> promise.map(result.unwrap(_, []))
@@ -290,6 +293,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
             date.month(date.today()),
             date.year(date.today()),
             past_sessions |> list.map(fn(session) { session.date }),
+            None,
           ),
         ),
         effect.none(),
@@ -306,14 +310,10 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
 //--PAGES------------------------------------------------------------------------
 
 pub fn view(model: Model) -> Element(Msg) {
-  let is_todays_session = case model.current_route {
-    SessionPage(date) -> date == date.today()
-    _ -> False
-  }
   let page = case model.current_route {
     Home -> view_home(model)
-    SessionPage(date) -> view_session_page(model, date)
-    ReviewPage ->
+    CurrentSessionPage -> view_current_session_page(model)
+    ReviewPage(_) ->
       review.view_session_review(model.review_model)
       |> list.map(element.map(_, Review))
   }
@@ -327,7 +327,7 @@ pub fn view(model: Model) -> Element(Msg) {
     md:grid-cols-[[start_full-start]_1fr_[main-start]_95%_[main-end]_1fr_[full-end_end]]
     grid-cols-[[start_full-start_main-start]_100%_[main-end_full-end_end]]
     grid-rows-[[header]_1fr_[content]_8fr_[footer]_1fr]
-    font-industrial",
+    font-hand",
       ),
       {
         case model.alarm_ringing {
@@ -380,13 +380,16 @@ pub fn view(model: Model) -> Element(Msg) {
         nav(
           [
             class(
-              "row-start-[footer] col-span-6 text-2xl p-4 border-t-1 border-uchu-yin gap-6 flex justify-around flex-row",
+              "col-[main-start_/_main-end] row-start-[footer] text-2xl p-4 border-t-1 border-uchu-yin gap-6 flex justify-around flex-row",
             ),
           ],
           [
             a([attribute.href("/"), class("self-center")], [text("🏡")]),
             {
-              use <- bool.guard(!is_todays_session, element.none())
+              use <- bool.guard(
+                model.current_route != CurrentSessionPage,
+                element.none(),
+              )
               button(
                 [
                   class("self-center cursor-pointer"),
@@ -403,9 +406,14 @@ pub fn view(model: Model) -> Element(Msg) {
 
 fn view_home(model: Model) -> List(Element(Msg)) {
   [
-    h1([class("text-7xl font-bold col-span-6 row-start-[header]")], [
-      text("💪🤸‍♂️🏋️"),
-    ]),
+    h1(
+      [
+        class(
+          "text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
+        ),
+      ],
+      [text("💪🤸‍♂️🏋️")],
+    ),
     section(
       [
         class(
@@ -420,30 +428,30 @@ fn view_home(model: Model) -> List(Element(Msg)) {
             button(
               [
                 class(
-                  "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+                  "font-slab font-bold p-1 text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
                 ),
                 attribute.attribute("popovertarget", "session-template-picker"),
               ],
-              [text("Start")],
+              [text("START")],
             )
           Ok(_) ->
             a(
               [
                 class(
-                  "block center font-code p-1 font-[400] text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+                  "font-slab font-bold flex justify-center items-center p-1 text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
                 ),
                 attribute.href("/session/current"),
               ],
-              [text("Session in Progress")],
+              [text("SESSION IN PROGRESS")],
             )
         },
         button(
           [
             class(
-              "font-code p-1 font-[400] text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+              "font-slab font-bold p-1 text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
             ),
           ],
-          [a([attribute.href("/review")], [text("Review")])],
+          [a([attribute.href("/review")], [text("REVIEW")])],
         ),
       ],
     ),
@@ -463,38 +471,35 @@ fn view_home(model: Model) -> List(Element(Msg)) {
   ]
 }
 
-fn view_session_page(model: Model, date: date.Date) -> List(Element(Msg)) {
-  case
-    list.find(model.sessions, fn(session) { session.date == date }),
-    date == date.today()
-  {
-    Error(_), _ -> [
-      h1([class("text-7xl font-bold col-[main-start_/_main-end]")], [
-        text("No session 😣"),
+fn view_current_session_page(model: Model) -> List(Element(Msg)) {
+  case list.find(model.sessions, fn(session) { session.date == date.today() }) {
+    Error(_) -> [
+      h1([class("font-slab text-7xl font-bold col-[main-start_/_main-end]")], [
+        text("No session today 😣"),
       ]),
     ]
-    Ok(session), is_today -> {
-      [
-        h1([class("text-7xl row-start-[header] font-bold col-span-5")], [
-          text(
-            session.emoji
-            <> " "
-            <> session.date
-            |> date.format("dd MMM yy"),
+    Ok(session) -> [
+      h1([class("font-slab text-7xl font-bold col-[main-start_/_main-end]")], [
+        text(session.emoji <> " " <> session.date |> date.format("dd MMM yy")),
+      ]),
+      section(
+        [
+          class(
+            "mt-4 row-start-[content] overflow-y-scroll gap-6 grid col-[main-start_/_main-end] grid-cols-6",
           ),
-        ]),
-        section(
-          [
-            class(
-              "mt-4 row-start-[content] overflow-y-scroll gap-6 grid col-[main-start_/_main-end] subgrid-rows grid-cols-6",
+        ],
+        [
+          table([class("w-full text-sm")], [
+            tbody(
+              [],
+              session.exercises
+                |> dict.to_list
+                |> list.map(view_exercise_detail),
             ),
-          ],
-          session.exercises
-            |> dict.to_list
-            |> list.map(view_exercise_group(_, is_today)),
-        ),
-      ]
-    }
+          ]),
+        ],
+      ),
+    ]
   }
 }
 
@@ -591,22 +596,6 @@ fn view_set_exercise_row(
   ])
 }
 
-fn view_exercise_group(
-  group: #(String, List(Exercise)),
-  is_today: Bool,
-) -> Element(Msg) {
-  html.article(
-    [class("col-span-6 subgrid-cols border-1 border-b-uchu-yin")],
-    list.append(
-      [h3([class("col-span-6 text-3xl font-bold")], [text(group.0)])],
-      list.index_map(group.1, case is_today {
-        True -> view_exercise_detail
-        False -> view_exercise_history
-      }),
-    ),
-  )
-}
-
 fn view_exercise_detail(exercise: Exercise, index: Int) -> Element(Msg) {
   case exercise {
     SetsExercise(name, reps, weight, rest) ->
@@ -653,22 +642,6 @@ fn view_exercise_detail(exercise: Exercise, index: Int) -> Element(Msg) {
           ],
           [text("❎")],
         ),
-      ])
-  }
-}
-
-fn view_exercise_history(exercise: Exercise, _index: Int) -> Element(Msg) {
-  case exercise {
-    SetsExercise(name, reps, weight, _rest) ->
-      div([class("contents")], [
-        text(name),
-        text(reps |> int.to_string <> "x "),
-        text(weight |> float.to_string <> "kg"),
-      ])
-    TimedExercise(name, duration) ->
-      div([class("contents")], [
-        text(name),
-        text(duration |> int.to_string <> "m"),
       ])
   }
 }
