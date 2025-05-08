@@ -1,4 +1,5 @@
 import gleam/dict.{type Dict}
+import gleam/list
 import gleam/option.{type Option}
 import rada/date
 
@@ -43,4 +44,10 @@ pub type GymSession {
     exercises: Dict(String, List(Exercise)),
     emoji: String,
   )
+}
+
+/// Appends an item to the end of a list
+///
+pub fn list_append_one(list: List(a), item: a) -> List(a) {
+  [item, ..list] |> list.reverse
 }

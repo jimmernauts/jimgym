@@ -11,6 +11,7 @@ import gleam/javascript/promise.{type Promise}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
+import gleam/string
 import gleam/uri.{type Uri}
 import lustre
 import lustre/attribute.{attribute, class, id, type_}
@@ -299,6 +300,22 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
         effect.none(),
       )
     }
+    Review(review.UserSelectedSessionDate(date)) -> {
+      let selected_session =
+        model.sessions
+        |> list.find(fn(session) { session.date == date })
+        |> option.from_result
+      #(
+        Model(
+          ..model,
+          review_model: review.ReviewModel(
+            ..model.review_model,
+            selected_session: selected_session,
+          ),
+        ),
+        effect.none(),
+      )
+    }
     Review(review_msg) -> {
       let #(review_model, effect) =
         review.update(model.review_model, review_msg)
@@ -337,7 +354,7 @@ pub fn view(model: Model) -> Element(Msg) {
       },
     ],
     page
-      |> list_append_one(case model.timer_id, model.alarm_ringing {
+      |> common.list_append_one(case model.timer_id, model.alarm_ringing {
         None, _ -> element.none()
         Some(_), False ->
           section(
@@ -376,7 +393,7 @@ pub fn view(model: Model) -> Element(Msg) {
             ],
           )
       })
-      |> list_append_one(
+      |> common.list_append_one(
         nav(
           [
             class(
@@ -417,7 +434,7 @@ fn view_home(model: Model) -> List(Element(Msg)) {
     section(
       [
         class(
-          "mt-4 gap-6 grid col-[main-start_/_main-end] grid-cols-6 grid-rows-4 row-start-[content]",
+          "mt-4 font-slab flex flex-col gap-4  col-[main-start_/_main-end] row-start-[content]",
         ),
       ],
       [
@@ -428,36 +445,48 @@ fn view_home(model: Model) -> List(Element(Msg)) {
             button(
               [
                 class(
-                  "font-slab font-bold p-1 text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+                  "bg-uchu-light-gray border-2 border-uchu-yin rounded-md overflow-hidden col-span-6 p-3 cursor-pointer flex gap-2 justify-start items-center",
                 ),
                 attribute.attribute("popovertarget", "session-template-picker"),
               ],
-              [text("START")],
+              [
+                h1([class("font-bold text-3xl")], [text("🟢 ")]),
+                h1([class("font-bold text-3xl")], [text("Start")]),
+              ],
             )
           Ok(_) ->
             a(
               [
                 class(
-                  "font-slab font-bold flex justify-center items-center p-1 text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+                  "font-slab font-bold flex justify-start p-3 text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6 gap-2 items-center",
                 ),
                 attribute.href("/session/current"),
               ],
-              [text("SESSION IN PROGRESS")],
+              [
+                h1([class("font-bold text-3xl")], [text("⌛ ")]),
+                h1([class("font-bold text-3xl")], [text("Session in progress")]),
+              ],
             )
         },
-        button(
+        a(
           [
             class(
-              "font-slab font-bold p-1 text-3xl text-uchu-yin bg-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6",
+              "bg-uchu-light-gray border-2 border-uchu-yin rounded-md overflow-hidden col-span-6 p-3 cursor-pointer flex gap-2 justify-start items-center",
             ),
+            attribute.href("/review"),
           ],
-          [a([attribute.href("/review")], [text("REVIEW")])],
+          [
+            h1([class("font-bold text-3xl")], [text("🕵️ ")]),
+            h1([class("font-bold text-3xl")], [text("Review")]),
+          ],
         ),
       ],
     ),
     section(
       [
-        class("mt-16 bg-white p-2 row-start-2 h-full w-full overflow-y-auto"),
+        class(
+          "mt-19 mb-16 font-slab bg-white p-2 row-start-2 h-full w-full overflow-y-auto",
+        ),
         attribute("popover", ""),
         id("session-template-picker"),
       ],
@@ -482,21 +511,22 @@ fn view_current_session_page(model: Model) -> List(Element(Msg)) {
       h1([class("font-slab text-7xl font-bold col-[main-start_/_main-end]")], [
         text(session.emoji <> " " <> session.date |> date.format("dd MMM yy")),
       ]),
-      section(
+      table(
         [
           class(
-            "mt-4 row-start-[content] overflow-y-scroll gap-6 grid col-[main-start_/_main-end] grid-cols-6",
+            "px-2 row-start-[content] overflow-y-scroll gap-6 grid col-[main-start_/_main-end] subgrid-cols w-full text-sm",
           ),
         ],
         [
-          table([class("w-full text-sm")], [
-            tbody(
-              [],
-              session.exercises
-                |> dict.to_list
-                |> list.map(view_exercise_detail),
-            ),
-          ]),
+          tbody(
+            [class("grid grid-cols-6 col-[main-start_/_main-end]")],
+            session.exercises
+              |> dict.to_list
+              |> list.map(fn(group) {
+                group.1 |> list.index_map(view_exercise_input)
+              })
+              |> list.flatten,
+          ),
         ],
       ),
     ]
@@ -507,7 +537,11 @@ fn view_current_session_page(model: Model) -> List(Element(Msg)) {
 
 fn view_session_template_card(template: common.SessionTemplate) -> Element(Msg) {
   details(
-    [class("bg-white border-2 border-uchu-yin rounded-md overflow-hidden")],
+    [
+      class(
+        "bg-white border-2 font-hand border-uchu-yin rounded-md overflow-hidden",
+      ),
+    ],
     [
       summary(
         [
@@ -516,7 +550,7 @@ fn view_session_template_card(template: common.SessionTemplate) -> Element(Msg) 
           ),
         ],
         [
-          h3([class("font-bold text-3xl")], [
+          h3([class("font-slab font-bold text-3xl")], [
             text(template.emoji <> " " <> template.name),
           ]),
         ],
@@ -539,7 +573,7 @@ fn view_session_template_card(template: common.SessionTemplate) -> Element(Msg) 
         button(
           [
             class(
-              "mt-4 w-full p-2 bg-uchu-light-gray border cursor-pointer border-uchu-yin rounded-md",
+              "mt-4 w-full p-2 bg-uchu-light-gray font-bold font-slab border cursor-pointer border-uchu-yin rounded-md",
             ),
             on_click(StartNewSession(Some(template))),
           ],
@@ -596,42 +630,82 @@ fn view_set_exercise_row(
   ])
 }
 
-fn view_exercise_detail(exercise: Exercise, index: Int) -> Element(Msg) {
+fn view_exercise_input(exercise: Exercise, index: Int) -> Element(Msg) {
   case exercise {
     SetsExercise(name, reps, weight, rest) ->
-      div([class("contents")], [
-        html.label([], [text("Reps:")]),
-        html.input([
-          class(""),
-          type_("number"),
-          attribute.value(reps |> int.to_string),
-        ]),
-        html.label([], [text("Weight:")]),
-        html.input([
-          class(""),
-          type_("number"),
-          attribute("step", "0.5"),
-          attribute.value(weight |> float.to_string),
-        ]),
-        button([class(""), on_click(ShowTimer(rest))], [
-          text(rest |> int.to_string <> "s ⌛"),
-        ]),
-        button(
+      tr([class("border-b border-gray-100 col-span-6 subgrid-cols gap-1")], [
+        td(
           [
-            class(""),
-            on_click(RemoveSetFromCurrentSessionExercises(index, name)),
+            class(
+              "text-center col-start-1 col-span-1 items-center flex justify-center",
+            ),
           ],
-          [text("❎")],
+          [
+            html.input([
+              case reps |> int.to_string |> string.length < 2 {
+                True -> attribute.style([#("padding-left", "1ch")])
+                False -> attribute.none()
+              },
+              class("w-[2ch]"),
+              type_("number"),
+              attribute.value(reps |> int.to_string),
+            ]),
+          ],
+        ),
+        td(
+          [
+            class(
+              "text-center col-start-2 items-center col-span-2 flex justify-start",
+            ),
+          ],
+          [text(name)],
+        ),
+        td(
+          [
+            class(
+              "text-center col-start-4 items-center col-span-1 flex justify-end",
+            ),
+          ],
+          [
+            html.input([
+              class("w-[3.5ch]"),
+              type_("number"),
+              attribute.value(weight |> float.to_string),
+            ]),
+            text("kg"),
+          ],
+        ),
+        td(
+          [
+            class(
+              "text-center col-start-5 items-center col-span-2 flex justify-evenly",
+            ),
+          ],
+          [
+            button([class(""), on_click(ShowTimer(rest))], [
+              text(rest |> int.to_string <> "s ⌛"),
+            ]),
+            button(
+              [
+                class(""),
+                on_click(RemoveSetFromCurrentSessionExercises(index, name)),
+              ],
+              [text("❎")],
+            ),
+          ],
         ),
       ])
     TimedExercise(name, duration) ->
-      div([class("contents")], [
-        html.label([], [text("Duration:")]),
-        html.input([
-          class(""),
-          type_("number"),
-          attribute.value(duration |> int.to_string),
+      tr([class("border-b border-gray-100")], [
+        td([class("py-1 text-center")], [
+          html.input([
+            class(""),
+            type_("number"),
+            attribute.value(duration |> int.to_string),
+          ]),
+          text("m"),
         ]),
+        td([class("py-1")], [text(name)]),
         button([class(""), on_click(ShowTimer(duration * 60))], [
           text(format_time(duration * 60) <> "s ⌛"),
         ]),
@@ -753,7 +827,3 @@ fn retrieve_sessions() -> Promise(Result(List(common.GymSession), String)) {
 pub fn do_retrieve_exercise_records() -> Promise(
   Result(List(common.ExerciseRecord), String),
 )
-
-fn list_append_one(list: List(a), item: a) -> List(a) {
-  [item, ..list] |> list.reverse
-}

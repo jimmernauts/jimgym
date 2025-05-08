@@ -17,7 +17,8 @@ import lustre/event.{on_click}
 import rada/date
 
 pub type ReviewMsg {
-  ChangedMonth(#(date.Month, Int))
+  UserChangedMonth(#(date.Month, Int))
+  UserSelectedSessionDate(date.Date)
 }
 
 pub type ReviewModel {
@@ -34,11 +35,13 @@ pub fn update(
   msg: ReviewMsg,
 ) -> #(ReviewModel, Effect(ReviewMsg)) {
   case msg {
-    ChangedMonth(#(month, year)) -> {
+    UserChangedMonth(#(month, year)) -> {
       #(ReviewModel(..model, current_month: month, current_year: year), {
         effect.none()
       })
     }
+    // UserSelectedSessionDate is handled in layer above
+    _ -> #(model, effect.none())
   }
 }
 
@@ -52,88 +55,71 @@ pub fn view_session_review(model: ReviewModel) -> List(Element(ReviewMsg)) {
           "col-[main-start_/_main-end] row-start-[content] grid-cols-7 grid gap-1 border-1 border-uchu-yin p-1",
         ),
       ],
-      [
-        [
-          html.article([class("col-span-7 flex row-span-1 justify-center")], [
-            html.p([], [
-              text(
-                model.current_month |> string.inspect
-                <> " "
-                <> model.current_year |> int.to_string,
+      html.article([class("col-span-7 flex row-span-1 justify-center")], [
+        html.p([], [
+          text(
+            model.current_month |> string.inspect
+            <> " "
+            <> model.current_year |> int.to_string,
+          ),
+        ]),
+      ])
+        |> common.list_append_one(
+          ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            |> list.map(fn(day) {
+              html.article(
+                [class("col-span-1 row-start-2 flex justify-center")],
+                [text(day)],
+              )
+            }),
+          _,
+        )
+        |> list.append(
+          generate_calendar_tiles(
+            model.current_month,
+            model.current_year,
+            model.session_dates,
+          )
+          |> common.list_append_one(view_session_history(model))
+          |> common.list_append_one(
+            html.nav([class("col-span-7 subgrid-cols row-span-1")], [
+              html.button(
+                [
+                  class("col-span-1 col-start-1"),
+                  type_("button"),
+                  on_click(
+                    UserChangedMonth(prev_month(
+                      model.current_month,
+                      model.current_year,
+                    )),
+                  ),
+                ],
+                [text("<")],
+              ),
+              html.button(
+                [
+                  class("col-span-1 col-start-7"),
+                  type_("button"),
+                  on_click(
+                    UserChangedMonth(next_month(
+                      model.current_month,
+                      model.current_year,
+                    )),
+                  ),
+                ],
+                [text(">")],
               ),
             ]),
-          ]),
-        ],
-        ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-          |> list.map(fn(day) {
-            html.article([class("col-span-1 row-start-2 flex justify-center")], [
-              text(day),
-            ])
-          }),
-        generate_calendar_tiles(
-          model.current_month,
-          model.current_year,
-          model.session_dates,
+          ),
         ),
-        [
-          html.nav([class("col-span-7 subgrid-cols row-span-1")], [
-            html.button(
-              [
-                class("col-span-1 col-start-1"),
-                type_("button"),
-                on_click(
-                  ChangedMonth(prev_month(
-                    model.current_month,
-                    model.current_year,
-                  )),
-                ),
-              ],
-              [text("<")],
-            ),
-            html.button(
-              [
-                class("col-span-1 col-start-7"),
-                type_("button"),
-                on_click(
-                  ChangedMonth(next_month(
-                    model.current_month,
-                    model.current_year,
-                  )),
-                ),
-              ],
-              [text(">")],
-            ),
-          ]),
-        ],
-      ]
-        |> list.flatten,
     ),
   ]
 }
 
-pub fn view_session_history(model: ReviewModel) -> List(Element(ReviewMsg)) {
+pub fn view_session_history(model: ReviewModel) -> Element(ReviewMsg) {
   case model.selected_session {
-    None -> [
-      h1([class("font-slab text-7xl font-bold col-[main-start_/_main-end]")], [
-        text("No session 😣"),
-      ]),
-    ]
-    Some(session) -> [
-      h1(
-        [
-          class(
-            "font-slab text-7xl row-start-[header] col-[main-start_/_main-end] font-bold",
-          ),
-        ],
-        [
-          text(
-            session.emoji
-            <> " "
-            <> session.date
-            |> date.format("dd MMM yy"),
-          ),
-        ],
-      ),
+    None -> element.none()
+    Some(session) ->
       section(
         [
           class(
@@ -151,8 +137,7 @@ pub fn view_session_history(model: ReviewModel) -> List(Element(ReviewMsg)) {
             ),
           ]),
         ],
-      ),
-    ]
+      )
   }
 }
 
@@ -206,6 +191,39 @@ pub fn view_exercise_history(
   }
 }
 
+pub fn view_calendar_day(
+  day: date.Date,
+  starting_column: String,
+  has_session: Bool,
+) -> Element(ReviewMsg) {
+  article(
+    [
+      class("col-span-1 grid grid-rows-2 justify-center"),
+      case has_session {
+        True -> event.on_click(UserSelectedSessionDate(day))
+        False -> attribute.none()
+      },
+      {
+        case starting_column {
+          "" -> attribute.none()
+          _ -> attribute.style([#("grid-column-start", starting_column)])
+        }
+      },
+    ],
+    [
+      div([class("row-start-1 flex justify-center")], [
+        text(day |> date.day |> int.to_string),
+      ]),
+      div([class("row-start-2 flex justify-center")], [
+        case has_session {
+          True -> text("💪")
+          False -> text(" ")
+        },
+      ]),
+    ],
+  )
+}
+
 pub fn group_exercises_by_sets(exercises: List(common.Exercise)) {
   let uniques = exercises |> list.unique
   let counts =
@@ -233,41 +251,6 @@ pub fn prev_month(month: date.Month, year: Int) -> #(date.Month, Int) {
   case month {
     date.Jan -> #(date.Dec, year - 1)
     _ -> #(date.month_to_number(month) - 1 |> date.number_to_month, year)
-  }
-}
-
-pub fn view_calendar_day(
-  day: date.Date,
-  starting_column: String,
-  has_session: Bool,
-) -> Element(ReviewMsg) {
-  article(
-    [
-      class("col-span-1 grid grid-rows-2 justify-center"),
-      {
-        case starting_column {
-          "" -> attribute.none()
-          _ -> attribute.style([#("grid-column-start", starting_column)])
-        }
-      },
-    ],
-    [
-      div([class("row-start-1 flex justify-center")], [
-        text(day |> date.day |> int.to_string),
-      ]),
-      div([class("row-start-2 flex justify-center")], [
-        case has_session {
-          True -> text("💪")
-          False -> text(" ")
-        },
-      ]),
-    ],
-  )
-  |> case has_session {
-    True -> fn(inner) {
-      a([href("/session/" <> day |> date.to_iso_string)], [inner])
-    }
-    False -> function.identity
   }
 }
 
