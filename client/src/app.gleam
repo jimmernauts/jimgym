@@ -31,8 +31,10 @@ import review
 pub type Msg {
   StartNewSession(Option(common.SessionTemplate))
   RemoveSetFromCurrentSessionExercises(Int, String)
+  UpdatedExerciseAtIndex(Int, common.Exercise)
   EndActiveSession
   SaveSession(common.GymSession)
+  QueueRetrievePastSessions
   RetrievedPastSessions(List(common.GymSession))
   UpdateSessionTemplates(List(common.SessionTemplate))
   HandleRouteChange(Route)
@@ -111,7 +113,13 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
         selected_session: None,
       ),
     ),
-    modem.init(handle_route_change),
+    effect.batch([
+      modem.init(handle_route_change),
+      {
+        use dispatch <- effect.from
+        dispatch(QueueRetrievePastSessions)
+      },
+    ]),
   )
 }
 
@@ -132,7 +140,6 @@ fn handle_route_change(uri: Uri) -> Msg {
 
 pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
   echo msg
-  echo model
   case msg {
     RemoveSetFromCurrentSessionExercises(index, name) -> {
       #(
@@ -151,6 +158,43 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
                       exercise_list
                       |> list.index_map(fn(exercise, i) { #(exercise, i) })
                       |> list.filter(fn(pair) { pair.1 != index })
+                      |> list.map(fn(pair) { pair.0 })
+                    }
+                    None -> []
+                  }
+                })
+              [
+                common.GymSession(session.date, new_exercises, session.emoji),
+                ..model.sessions
+              ]
+            }
+          },
+        ),
+        effect.none(),
+      )
+    }
+    UpdatedExerciseAtIndex(index, new_exercise) -> {
+      #(
+        Model(
+          ..model,
+          sessions: case
+            model.sessions
+            |> list.find(fn(session) { session.date == date.today() })
+          {
+            Error(_) -> model.sessions
+            Ok(session) -> {
+              let new_exercises =
+                dict.upsert(session.exercises, new_exercise.name, fn(exercises) {
+                  case exercises {
+                    Some(exercise_list) -> {
+                      exercise_list
+                      |> list.index_map(fn(exercise, i) { #(exercise, i) })
+                      |> list.filter_map(fn(pair) {
+                        case pair.1 == index {
+                          True -> Ok(#(new_exercise, index))
+                          False -> Ok(pair)
+                        }
+                      })
                       |> list.map(fn(pair) { pair.0 })
                     }
                     None -> []
@@ -208,19 +252,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
       #(Model(..model, session_templates: templates), effect.none())
     }
     HandleRouteChange(route) -> {
-      #(Model(..model, current_route: route), {
-        case route {
-          Home -> effect.none()
-          ReviewPage(_) -> {
-            use dispatch <- effect.from
-            retrieve_sessions()
-            |> promise.map(result.unwrap(_, []))
-            |> promise.tap(fn(x) { dispatch(RetrievedPastSessions(x)) })
-            Nil
-          }
-          _ -> effect.none()
-        }
-      })
+      #(Model(..model, current_route: route), effect.none())
     }
     ShowTimer(seconds) -> {
       #(Model(..model, timer: seconds), {
@@ -283,7 +315,19 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
     SaveSession(session) -> {
       save_session(session)
-      #(model, effect.none())
+      #(model, {
+        use dispatch <- effect.from
+        QueueRetrievePastSessions |> dispatch
+      })
+    }
+    QueueRetrievePastSessions -> {
+      #(model, {
+        use dispatch <- effect.from
+        retrieve_sessions()
+        |> promise.map(result.unwrap(_, []))
+        |> promise.tap(fn(x) { dispatch(RetrievedPastSessions(x)) })
+        Nil
+      })
     }
     RetrievedPastSessions(past_sessions) -> {
       #(
@@ -363,6 +407,14 @@ pub fn view(model: Model) -> Element(Msg) {
               div([class("flex flex-col gap-4 justify-center items-center")], [
                 h1([class("text-7xl font-bold")], [
                   text(model.timer |> int.to_string),
+                  button(
+                    [
+                      class("col-span-1 col-start-6 row-start-1"),
+                      type_("button"),
+                      on_click(CancelAlarm),
+                    ],
+                    [text("❌")],
+                  ),
                 ]),
               ]),
             ],
@@ -648,7 +700,17 @@ fn view_exercise_input(exercise: Exercise, index: Int) -> Element(Msg) {
               },
               class("w-[2ch]"),
               type_("number"),
+              attribute.step("1"),
               attribute.value(reps |> int.to_string),
+              event.on_input(fn(input) {
+                UpdatedExerciseAtIndex(
+                  index,
+                  common.SetsExercise(
+                    ..exercise,
+                    reps: input |> int.parse |> result.unwrap(0),
+                  ),
+                )
+              }),
             ]),
           ],
         ),
@@ -670,6 +732,18 @@ fn view_exercise_input(exercise: Exercise, index: Int) -> Element(Msg) {
             html.input([
               class("w-[3.5ch]"),
               type_("number"),
+              attribute.step("0.5"),
+              event.on_input(fn(input) {
+                echo input
+                UpdatedExerciseAtIndex(
+                  index,
+                  common.SetsExercise(
+                    ..exercise,
+                    weight: input
+                      |> common.float_parse_tolerant,
+                  ),
+                )
+              }),
               attribute.value(weight |> float.to_string),
             ]),
             text("kg"),
@@ -702,6 +776,15 @@ fn view_exercise_input(exercise: Exercise, index: Int) -> Element(Msg) {
             class(""),
             type_("number"),
             attribute.value(duration |> int.to_string),
+            event.on_input(fn(input) {
+              UpdatedExerciseAtIndex(
+                index,
+                common.TimedExercise(
+                  ..exercise,
+                  duration: input |> int.parse |> result.unwrap(0),
+                ),
+              )
+            }),
           ]),
           text("m"),
         ]),

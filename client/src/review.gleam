@@ -1,7 +1,6 @@
 import common.{type GymSession}
 import gleam/dict
 import gleam/float
-import gleam/function
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -36,9 +35,15 @@ pub fn update(
 ) -> #(ReviewModel, Effect(ReviewMsg)) {
   case msg {
     UserChangedMonth(#(month, year)) -> {
-      #(ReviewModel(..model, current_month: month, current_year: year), {
-        effect.none()
-      })
+      #(
+        ReviewModel(
+          ..model,
+          current_month: month,
+          current_year: year,
+          selected_session: None,
+        ),
+        { effect.none() },
+      )
     }
     // UserSelectedSessionDate is handled in layer above
     _ -> #(model, effect.none())
@@ -49,6 +54,14 @@ pub fn update(
 
 pub fn view_session_review(model: ReviewModel) -> List(Element(ReviewMsg)) {
   [
+    h1(
+      [
+        class(
+          "text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
+        ),
+      ],
+      [text("💪🤸‍♂️🏋️")],
+    ),
     section(
       [
         class(
@@ -121,11 +134,7 @@ pub fn view_session_history(model: ReviewModel) -> Element(ReviewMsg) {
     None -> element.none()
     Some(session) ->
       section(
-        [
-          class(
-            "mt-4 row-start-[content] overflow-y-scroll gap-6 grid col-[main-start_/_main-end] grid-cols-6",
-          ),
-        ],
+        [class("mt-4 row-start-8 row-span-1 col-span-7 overflow-y-scroll")],
         [
           table([class("w-full text-sm")], [
             tbody(
