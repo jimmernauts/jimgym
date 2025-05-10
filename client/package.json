@@ -2,16 +2,13 @@
     "name": "jim_gym",
     "version": "0.0.1",
     "type": "module",
-    "workspaces": [
-        "../packages/*"
-    ],
     "scripts": {
         "dev": "bunx --bun vite dev"
     },
     "dependencies": {
         "@chouqueth/gleam": "^1.9.1",
         "tailwindcss": "^4.0.14",
-        "tailwindcss-fluid-type": "workspace:*",
+        "tailwindcss-fluid-type": "davidhellmann/tailwindcss-fluid-type#next",
         "vite-plugin-inspect": "^11.0.1"
     },
     "devDependencies": {
