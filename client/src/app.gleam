@@ -44,6 +44,9 @@ pub type Msg {
   PlayAlarm
   CancelAlarm
   Review(review.ReviewMsg)
+  RequestWakeLock
+  ReleaseWakeLock
+  StoreWakeLock(WakeLockSentinel)
 }
 
 pub type Route {
@@ -62,6 +65,7 @@ pub type Model {
     alarm_ringing: Bool,
     alarm_audio: Option(audio.Audio),
     review_model: review.ReviewModel,
+    wake_lock: Option(WakeLockSentinel),
   )
 }
 
@@ -90,7 +94,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
         SessionTemplate("Whole Body B", "🏋️", [
           SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
           SetsExerciseTemplate("Deadlifts", 3, 10, 20.0, 90),
-          SetsExerciseTemplate("Pull-ups", 3, 10, 20.0, 90),
+          SetsExerciseTemplate("Pull-ups", 3, 8, 14.0, 90),
           SetsExerciseTemplate("Shoulder Press", 3, 8, 17.5, 90),
         ]),
         SessionTemplate("Rehab", "🏃", [
@@ -106,6 +110,7 @@ fn init(_flags) -> #(Model, Effect(Msg)) {
       timer_id: None,
       alarm_ringing: False,
       alarm_audio: None,
+      wake_lock: None,
       review_model: review.ReviewModel(
         current_month: date.month(date.today()),
         session_dates: [],
@@ -292,6 +297,7 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
     }
     PlayAlarm -> {
       let alarm = audio.new("/hell-march-2.mp3")
+      echo "playing alarm" <> string.inspect(alarm)
       #(Model(..model, alarm_audio: Some(alarm)), {
         alarm |> audio.play()
         effect.none()
@@ -312,6 +318,29 @@ pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
           effect.none()
         },
       )
+    }
+    RequestWakeLock -> {
+      #(model, {
+        use dispatch <- effect.from
+        request_wake_lock()
+        |> promise.map(option.from_result)
+        |> promise.tap(fn(x) {
+          case x {
+            Some(sentinel) -> dispatch(StoreWakeLock(sentinel))
+            None -> Nil
+          }
+        })
+        Nil
+      })
+    }
+    ReleaseWakeLock -> {
+      #(Model(..model, wake_lock: None), {
+        model.wake_lock |> option.map(release_wake_lock)
+        effect.none()
+      })
+    }
+    StoreWakeLock(wake_lock) -> {
+      #(Model(..model, wake_lock: Some(wake_lock)), effect.none())
     }
     SaveSession(session) -> {
       save_session(session)
@@ -398,53 +427,6 @@ pub fn view(model: Model) -> Element(Msg) {
       },
     ],
     page
-      |> common.list_append_one(case model.timer_id, model.alarm_ringing {
-        None, _ -> element.none()
-        Some(_), False ->
-          section(
-            [class("bg-white p-16 h-full w-full absolute z-10"), id("timer")],
-            [
-              div([class("flex flex-col gap-4 justify-center items-center")], [
-                h1([class("text-7xl font-bold")], [
-                  text(model.timer |> int.to_string),
-                  button(
-                    [
-                      class("col-span-1 col-start-6 row-start-1"),
-                      type_("button"),
-                      on_click(CancelAlarm),
-                    ],
-                    [text("❌")],
-                  ),
-                ]),
-              ]),
-            ],
-          )
-        Some(_), True ->
-          section(
-            [class("bg-white p-16 h-full w-full absolute z-10"), id("timer")],
-            [
-              div(
-                [class("grid grid-cols-6 gap-4 justify-center items-center")],
-                [
-                  button(
-                    [
-                      class("col-span-1 col-start-6 row-start-1"),
-                      type_("button"),
-                      on_click(CancelAlarm),
-                    ],
-                    [text("❌")],
-                  ),
-                  h1([class("col-span-2 row-start-2 text-7xl font-bold")], [
-                    text("🔔 Alarm!"),
-                  ]),
-                  h1([class("col-span-2 row-start-2 text-7xl font-bold")], [
-                    text(model.timer |> int.to_string),
-                  ]),
-                ],
-              ),
-            ],
-          )
-      })
       |> common.list_append_one(
         nav(
           [
@@ -454,6 +436,40 @@ pub fn view(model: Model) -> Element(Msg) {
           ],
           [
             a([attribute.href("/"), class("self-center")], [text("🏡")]),
+            {
+              case model.timer_id, model.alarm_ringing {
+                None, _ -> element.none()
+                Some(_), False ->
+                  button(
+                    [
+                      class("flex flex-row gap-4 justify-center items-center"),
+                      type_("button"),
+                      on_click(CancelAlarm),
+                    ],
+                    [
+                      h1([class("text-3xl font-bold")], [
+                        text(model.timer |> int.to_string),
+                      ]),
+                      html.span([class("text-lg")], [text(" ❌")]),
+                    ],
+                  )
+                Some(_), True ->
+                  button(
+                    [
+                      class("flex flex-row gap-4 justify-center items-center"),
+                      type_("button"),
+                      on_click(CancelAlarm),
+                    ],
+                    [
+                      h1([class("text-3xl font-bold")], [
+                        text("🔔 "),
+                        text(model.timer |> int.to_string),
+                      ]),
+                      html.span([class("text-lg")], [text(" ❌")]),
+                    ],
+                  )
+              }
+            },
             {
               use <- bool.guard(
                 model.current_route != CurrentSessionPage,
@@ -466,6 +482,18 @@ pub fn view(model: Model) -> Element(Msg) {
                 ],
                 [text("🚩")],
               )
+            },
+            {
+              case model.wake_lock {
+                Some(_) ->
+                  button([class("cursor-pointer"), on_click(ReleaseWakeLock)], [
+                    text("🔒"),
+                  ])
+                None ->
+                  button([class("cursor-pointer"), on_click(RequestWakeLock)], [
+                    text("🔓"),
+                  ])
+              }
             },
           ],
         ),
@@ -555,14 +583,24 @@ fn view_home(model: Model) -> List(Element(Msg)) {
 fn view_current_session_page(model: Model) -> List(Element(Msg)) {
   case list.find(model.sessions, fn(session) { session.date == date.today() }) {
     Error(_) -> [
-      h1([class("font-slab text-7xl font-bold col-[main-start_/_main-end]")], [
-        text("No session today 😣"),
-      ]),
+      h1(
+        [
+          class(
+            "font-slab text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
+          ),
+        ],
+        [text("No session today 😣")],
+      ),
     ]
     Ok(session) -> [
-      h1([class("font-slab text-7xl font-bold col-[main-start_/_main-end]")], [
-        text(session.emoji <> " " <> session.date |> date.format("dd MMM yy")),
-      ]),
+      h1(
+        [
+          class(
+            "font-slab text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
+          ),
+        ],
+        [text(session.emoji <> " " <> session.date |> date.format("dd MMM yy"))],
+      ),
       table(
         [
           class(
@@ -826,14 +864,18 @@ fn format_time(seconds: Int) -> String {
   minutes |> int.to_string <> ":" <> remaining_seconds |> int.to_string
 }
 
-//-----AUDIO ------------------------------------------------------------------------
+//-----BROWSER ------------------------------------------------------------------------
 
-fn stop_audio(audio: audio.Audio) -> Nil {
-  do_stop_audio(audio)
-}
+@external(javascript, "./browser.ffi.mjs", "do_stop_audio")
+pub fn stop_audio(audio: audio.Audio) -> Nil
 
-@external(javascript, "./stopAudio.ffi.mjs", "do_stop_audio")
-pub fn do_stop_audio(audio: audio.Audio) -> Nil
+pub type WakeLockSentinel
+
+@external(javascript, "./browser.ffi.mjs", "requestWakeLock")
+pub fn request_wake_lock() -> Promise(Result(WakeLockSentinel, String))
+
+@external(javascript, "./browser.ffi.mjs", "releaseWakeLock")
+pub fn release_wake_lock(sentinel: WakeLockSentinel) -> Nil
 
 //-----DB --------------------------------------------------------------------------
 
