@@ -71,7 +71,7 @@ pub fn view_session_review(model: ReviewModel) -> List(Element(ReviewMsg)) {
       html.article([class("col-span-7 flex row-span-1 justify-center")], [
         html.p([], [
           text(
-            model.current_month |> string.inspect
+            model.current_month |> month_to_label
             <> " "
             <> model.current_year |> int.to_string,
           ),
@@ -316,5 +316,22 @@ pub fn generate_calendar_tiles(
           }),
       ])
     }
+  }
+}
+
+pub fn month_to_label(month: date.Month) -> String {
+  case month {
+    date.Jan -> "Jan"
+    date.Feb -> "Feb"
+    date.Mar -> "Mar"
+    date.Apr -> "Apr"
+    date.May -> "May"
+    date.Jun -> "Jun"
+    date.Jul -> "Jul"
+    date.Aug -> "Aug"
+    date.Sep -> "Sep"
+    date.Oct -> "Oct"
+    date.Nov -> "Nov"
+    date.Dec -> "Dec"
   }
 }
