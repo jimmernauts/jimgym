@@ -410,7 +410,7 @@ pub fn view(model: Model) -> Element(Msg) {
   html.main(
     [
       class(
-        "h-screen grid p-2 gap-2
+        "h-dvh grid p-2 gap-2
     2xl:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_90%_[main-end]_3fr_[full-end]_1fr_[end]]
     xl:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_95%_[main-end]_3fr_[full-end]_1fr_[end]]
     lg:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_95%_[main-end]_3fr_[full-end]_1fr_[end]]
