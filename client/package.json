@@ -9,6 +9,7 @@
         "dev": "bunx --bun vite dev"
     },
     "dependencies": {
+        "@chouqueth/gleam": "^1.9.1",
         "tailwindcss": "^4.0.14",
         "tailwindcss-fluid-type": "workspace:*",
         "vite-plugin-inspect": "^11.0.1"
