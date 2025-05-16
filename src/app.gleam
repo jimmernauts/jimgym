@@ -1,855 +1,306 @@
-import common.{
-  type Exercise, type ExerciseTemplate, ExerciseRecord, GymSession,
-  SessionTemplate, SetsExercise, SetsExerciseTemplate, TimedExercise,
-  TimedExerciseTemplate,
-}
+import common.{type Exercise, ExerciseRecord, GymSession, SetsExercise, TimedExercise}
 import gleam/bool
-import gleam/dict
+import gleam/dict.{type Dict}
+import gleam/erlang/process
 import gleam/float
 import gleam/int
-import gleam/javascript/promise.{type Promise}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import gleam/uri.{type Uri}
-import lustre
-import lustre/attribute.{attribute, class, id, type_}
-import lustre/effect.{type Effect}
-import lustre/element.{type Element}
-import lustre/element/html.{
-  a, button, details, div, h1, h3, nav, section, summary, table, tbody, td, text,
-  tr,
-}
-import lustre/event.{on_click}
-import modem
-import plinth/browser/audio
-import plinth/javascript/global
+import gleam/io
+import lustre/attribute.{class, href, lang, name, rel, type_, value, method, action, step, for, id}
+import lustre/element.{type Element, to_document_string}
+import lustre/element/html
+import mist
 import rada/date
-import review
+// import review // Commented out as review page is not part of this SSR refactor phase
+import wisp.{type Request, type Response}
+import wisp/wisp_mist
+import gleam/http/client
+import gleam/http
+import exercise_actor
+import supabase_client
+import wisp/http_context
 
-pub type Msg {
-  StartNewSession(Option(common.SessionTemplate))
-  RemoveSetFromCurrentSessionExercises(Int, String)
-  UpdatedExerciseAtIndex(Int, common.Exercise)
-  EndActiveSession
-  SaveSession(common.GymSession)
-  QueueRetrievePastSessions
-  RetrievedPastSessions(List(common.GymSession))
-  UpdateSessionTemplates(List(common.SessionTemplate))
-  HandleRouteChange(Route)
-  ShowTimer(Int)
-  TimerTick
-  TimerStarted(global.TimerID)
-  PlayAlarm
-  CancelAlarm
-  Review(review.ReviewMsg)
-  RequestWakeLock
-  ReleaseWakeLock
-  StoreWakeLock(WakeLockSentinel)
+// Application context to hold shared resources like actor PID and HTTP client
+pub type AppContext {
+  AppContext(actor_subject: process.Subject(exercise_actor.Msg), http_client: client.Client)
 }
 
-pub type Route {
-  Home
-  CurrentSessionPage
-  ReviewPage(Option(date.Date))
-}
+// Client-side Model and Msg - Commented out for SSR refactor
+// pub type Msg {
+//   StartNewSession(Option(common.SessionTemplate))
+//   RemoveSetFromCurrentSessionExercises(Int, String)
+//   UpdatedExerciseAtIndex(Int, common.Exercise)
+//   EndActiveSession
+//   SaveSession(common.GymSession)
+//   QueueRetrievePastSessions
+//   RetrievedPastSessions(List(common.GymSession))
+//   UpdateSessionTemplates(List(common.SessionTemplate))
+//   HandleRouteChange(Route)
+//   ShowTimer(Int)
+//   TimerTick
+//   TimerStarted(Int)
+//   PlayAlarm
+//   CancelAlarm
+//   Review(review.ReviewMsg)
+// }
+// 
+// pub type Route {
+//   Home
+//   CurrentSessionPage
+//   ReviewPage(Option(date.Date))
+// }
+// 
+// pub type Model {
+//   Model(
+//     current_route: Route,
+//     sessions: List(common.GymSession),
+//     session_templates: List(common.SessionTemplate),
+//     review_model: review.ReviewModel,
+//   )
+// }
+// 
+// fn init(_flags) -> Model {
+//   let initial_route = Home
+//   Model(
+//     current_route: initial_route,
+//     sessions: [],
+//     session_templates: [
+//       // ... (session templates from original code) ...
+//     ],
+//     review_model: review.ReviewModel(
+//       current_month: date.month(date.today()),
+//       session_dates: [],
+//       current_year: date.year(date.today()),
+//       selected_session: None,
+//     ),
+//   )
+// }
 
-pub type Model {
-  Model(
-    current_route: Route,
-    sessions: List(common.GymSession),
-    session_templates: List(common.SessionTemplate),
-    timer: Int,
-    timer_id: Option(global.TimerID),
-    alarm_ringing: Bool,
-    alarm_audio: Option(audio.Audio),
-    review_model: review.ReviewModel,
-    wake_lock: Option(WakeLockSentinel),
-  )
-}
+// -- SSR VIEW FUNCTIONS --
 
-fn init(_flags) -> #(Model, Effect(Msg)) {
-  let initial_route =
-    modem.initial_uri()
-    |> result.map(handle_route_change)
-    |> result.map(fn(x) {
-      case x {
-        HandleRouteChange(route) -> route
-        _ -> Home
-      }
-    })
-    |> result.unwrap(Home)
-  #(
-    Model(
-      current_route: initial_route,
-      sessions: [],
-      session_templates: [
-        SessionTemplate("Whole Body A", "💪", [
-          SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 90),
-          SetsExerciseTemplate("Sled Push", 5, 10, 20.0, 90),
-          SetsExerciseTemplate("Bench Press", 3, 10, 20.0, 90),
-          SetsExerciseTemplate("Rows", 3, 10, 20.0, 90),
-        ]),
-        SessionTemplate("Whole Body B", "🏋️", [
-          SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
-          SetsExerciseTemplate("Deadlifts", 3, 10, 20.0, 90),
-          SetsExerciseTemplate("Pull-ups", 3, 8, 14.0, 90),
-          SetsExerciseTemplate("Shoulder Press", 3, 8, 17.5, 90),
-        ]),
-        SessionTemplate("Rehab", "🏃", [
-          SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
-          SetsExerciseTemplate("Patrick Step", 3, 20, 0.0, 60),
-        ]),
-        SessionTemplate("Cardio", "🏃", [
-          TimedExerciseTemplate("Backwards Treadmill", 20),
-          TimedExerciseTemplate("Rowing", 10),
-        ]),
-      ],
-      timer: 0,
-      timer_id: None,
-      alarm_ringing: False,
-      alarm_audio: None,
-      wake_lock: None,
-      review_model: review.ReviewModel(
-        current_month: date.month(date.today()),
-        session_dates: [],
-        current_year: date.year(date.today()),
-        selected_session: None,
-      ),
-    ),
-    effect.batch([
-      modem.init(handle_route_change),
-      {
-        use dispatch <- effect.from
-        dispatch(QueueRetrievePastSessions)
-      },
-    ]),
-  )
-}
-
-fn handle_route_change(uri: Uri) -> Msg {
-  case uri.path_segments(uri.path) {
-    [] -> HandleRouteChange(Home)
-    ["session", "current"] -> HandleRouteChange(CurrentSessionPage)
-    ["session", date] ->
-      HandleRouteChange(
-        ReviewPage(Some(
-          date.from_iso_string(date) |> result.unwrap(date.today()),
-        )),
-      )
-    ["review"] -> HandleRouteChange(ReviewPage(None))
-    _ -> HandleRouteChange(Home)
-  }
-}
-
-pub fn update(model: Model, msg: Msg) -> #(Model, Effect(Msg)) {
-  echo msg
-  case msg {
-    RemoveSetFromCurrentSessionExercises(index, name) -> {
-      #(
-        Model(
-          ..model,
-          sessions: case
-            model.sessions
-            |> list.find(fn(session) { session.date == date.today() })
-          {
-            Error(_) -> model.sessions
-            Ok(session) -> {
-              let new_exercises =
-                dict.upsert(session.exercises, name, fn(exercises) {
-                  case exercises {
-                    Some(exercise_list) -> {
-                      exercise_list
-                      |> list.index_map(fn(exercise, i) { #(exercise, i) })
-                      |> list.filter(fn(pair) { pair.1 != index })
-                      |> list.map(fn(pair) { pair.0 })
-                    }
-                    None -> []
-                  }
-                })
-              [
-                common.GymSession(session.date, new_exercises, session.emoji),
-                ..model.sessions
-              ]
-            }
-          },
-        ),
-        effect.none(),
-      )
-    }
-    UpdatedExerciseAtIndex(index, new_exercise) -> {
-      #(
-        Model(
-          ..model,
-          sessions: case
-            model.sessions
-            |> list.find(fn(session) { session.date == date.today() })
-          {
-            Error(_) -> model.sessions
-            Ok(session) -> {
-              let new_exercises =
-                dict.upsert(session.exercises, new_exercise.name, fn(exercises) {
-                  case exercises {
-                    Some(exercise_list) -> {
-                      exercise_list
-                      |> list.index_map(fn(exercise, i) { #(exercise, i) })
-                      |> list.filter_map(fn(pair) {
-                        case pair.1 == index {
-                          True -> Ok(#(new_exercise, index))
-                          False -> Ok(pair)
-                        }
-                      })
-                      |> list.map(fn(pair) { pair.0 })
-                    }
-                    None -> []
-                  }
-                })
-              [
-                common.GymSession(session.date, new_exercises, session.emoji),
-                ..model.sessions
-              ]
-            }
-          },
-        ),
-        effect.none(),
-      )
-    }
-    EndActiveSession -> {
-      #(
-        model,
-        effect.batch([
-          modem.push("/", None, None),
-          case
-            model.sessions
-            |> list.find(fn(session) { session.date == date.today() })
-          {
-            Error(_) -> effect.none()
-            Ok(session) -> {
-              use dispatch <- effect.from
-              dispatch(SaveSession(session))
-            }
-          },
-        ]),
-      )
-    }
-    StartNewSession(template) -> {
-      #(
-        Model(..model, sessions: [
-          case template {
-            Some(common.SessionTemplate(_name, emoji, exercises)) -> {
-              common.GymSession(
-                date.today(),
-                exercises
-                  |> list.map(convert_template_to_sets)
-                  |> dict.from_list,
-                emoji,
-              )
-            }
-            None -> GymSession(date.today(), dict.new(), "")
-          },
-          ..model.sessions
-        ]),
-        modem.replace("session/current", None, None),
-      )
-    }
-    UpdateSessionTemplates(templates) -> {
-      #(Model(..model, session_templates: templates), effect.none())
-    }
-    HandleRouteChange(route) -> {
-      #(Model(..model, current_route: route), effect.none())
-    }
-    ShowTimer(seconds) -> {
-      #(Model(..model, timer: seconds), {
-        case model.timer_id {
-          Some(timer_id) -> global.clear_interval(timer_id)
-          None -> Nil
-        }
-        use dispatch <- effect.from
-        let timer_id = global.set_interval(1000, fn() { dispatch(TimerTick) })
-        dispatch(TimerStarted(timer_id))
-      })
-    }
-    TimerStarted(timer_id) -> {
-      #(Model(..model, timer_id: Some(timer_id)), effect.none())
-    }
-    TimerTick -> {
-      case model.timer {
-        i if -20 < i && i < 0 -> {
-          #(Model(..model, timer: i - 1, alarm_ringing: True), effect.none())
-        }
-        i if i == 0 -> {
-          #(Model(..model, timer: i - 1, alarm_ringing: True), {
-            use dispatch <- effect.from
-            dispatch(PlayAlarm)
-          })
-        }
-        i if i > 0 -> {
-          #(Model(..model, timer: i - 1), effect.none())
-        }
-        _ -> {
-          #(Model(..model, timer: 0, alarm_ringing: False, timer_id: None), {
-            model.timer_id |> option.map(global.clear_interval)
-            effect.none()
-          })
-        }
-      }
-    }
-    PlayAlarm -> {
-      let alarm = audio.new("/hell-march-2.mp3")
-      echo "playing alarm" <> string.inspect(alarm)
-      #(Model(..model, alarm_audio: Some(alarm)), {
-        alarm |> audio.play()
-        effect.none()
-      })
-    }
-    CancelAlarm -> {
-      #(
-        Model(
-          ..model,
-          alarm_ringing: False,
-          timer: 0,
-          timer_id: None,
-          alarm_audio: None,
-        ),
-        {
-          model.timer_id |> option.map(global.clear_interval)
-          model.alarm_audio |> option.map(stop_audio)
-          effect.none()
-        },
-      )
-    }
-    RequestWakeLock -> {
-      #(model, {
-        use dispatch <- effect.from
-        request_wake_lock()
-        |> promise.map(option.from_result)
-        |> promise.tap(fn(x) {
-          case x {
-            Some(sentinel) -> dispatch(StoreWakeLock(sentinel))
-            None -> Nil
-          }
-        })
-        Nil
-      })
-    }
-    ReleaseWakeLock -> {
-      #(Model(..model, wake_lock: None), {
-        model.wake_lock |> option.map(release_wake_lock)
-        effect.none()
-      })
-    }
-    StoreWakeLock(wake_lock) -> {
-      #(Model(..model, wake_lock: Some(wake_lock)), effect.none())
-    }
-    SaveSession(session) -> {
-      save_session(session)
-      #(model, {
-        use dispatch <- effect.from
-        QueueRetrievePastSessions |> dispatch
-      })
-    }
-    QueueRetrievePastSessions -> {
-      #(model, {
-        use dispatch <- effect.from
-        retrieve_sessions()
-        |> promise.map(result.unwrap(_, []))
-        |> promise.tap(fn(x) { dispatch(RetrievedPastSessions(x)) })
-        Nil
-      })
-    }
-    RetrievedPastSessions(past_sessions) -> {
-      #(
-        Model(
-          ..model,
-          sessions: past_sessions,
-          review_model: review.ReviewModel(
-            date.month(date.today()),
-            date.year(date.today()),
-            past_sessions |> list.map(fn(session) { session.date }),
-            None,
-          ),
-        ),
-        effect.none(),
-      )
-    }
-    Review(review.UserSelectedSessionDate(date)) -> {
-      let selected_session =
-        model.sessions
-        |> list.find(fn(session) { session.date == date })
-        |> option.from_result
-      #(
-        Model(
-          ..model,
-          review_model: review.ReviewModel(
-            ..model.review_model,
-            selected_session: selected_session,
-          ),
-        ),
-        effect.none(),
-      )
-    }
-    Review(review_msg) -> {
-      let #(review_model, effect) =
-        review.update(model.review_model, review_msg)
-      #(Model(..model, review_model: review_model), effect.map(effect, Review))
-    }
-  }
-}
-
-//--PAGES------------------------------------------------------------------------
-
-pub fn view(model: Model) -> Element(Msg) {
-  let page = case model.current_route {
-    Home -> view_home(model)
-    CurrentSessionPage -> view_current_session_page(model)
-    ReviewPage(_) ->
-      review.view_session_review(model.review_model)
-      |> list.map(element.map(_, Review))
-  }
-  html.main(
-    [
-      class(
-        "h-dvh grid p-2 gap-2
-    2xl:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_90%_[main-end]_3fr_[full-end]_1fr_[end]]
-    xl:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_95%_[main-end]_3fr_[full-end]_1fr_[end]]
-    lg:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_95%_[main-end]_3fr_[full-end]_1fr_[end]]
-    md:grid-cols-[[start_full-start]_1fr_[main-start]_95%_[main-end]_1fr_[full-end_end]]
-    grid-cols-[[start_full-start_main-start]_100%_[main-end_full-end_end]]
-    grid-rows-[[header]_1fr_[content]_8fr_[footer]_1fr]
-    font-hand",
-      ),
-      {
-        case model.alarm_ringing {
-          True -> on_click(CancelAlarm)
-          _ -> attribute.none()
-        }
-      },
-    ],
-    page
-      |> common.list_append_one(
-        nav(
-          [
-            class(
-              "col-[main-start_/_main-end] row-start-[footer] text-2xl p-4 border-t-1 border-uchu-yin gap-6 flex justify-around flex-row",
-            ),
-          ],
-          [
-            a([attribute.href("/"), class("self-center")], [text("🏡")]),
-            {
-              case model.timer_id, model.alarm_ringing {
-                None, _ -> element.none()
-                Some(_), False ->
-                  button(
-                    [
-                      class("flex flex-row gap-4 justify-center items-center"),
-                      type_("button"),
-                      on_click(CancelAlarm),
-                    ],
-                    [
-                      h1([class("text-3xl font-bold")], [
-                        text(model.timer |> int.to_string),
-                      ]),
-                      html.span([class("text-lg")], [text(" ❌")]),
-                    ],
-                  )
-                Some(_), True ->
-                  button(
-                    [
-                      class("flex flex-row gap-4 justify-center items-center"),
-                      type_("button"),
-                      on_click(CancelAlarm),
-                    ],
-                    [
-                      h1([class("text-3xl font-bold")], [
-                        text("🔔 "),
-                        text(model.timer |> int.to_string),
-                      ]),
-                      html.span([class("text-lg")], [text(" ❌")]),
-                    ],
-                  )
-              }
-            },
-            {
-              use <- bool.guard(
-                model.current_route != CurrentSessionPage,
-                element.none(),
-              )
-              button(
-                [
-                  class("self-center cursor-pointer"),
-                  on_click(EndActiveSession),
-                ],
-                [text("🚩")],
-              )
-            },
-            {
-              case model.wake_lock {
-                Some(_) ->
-                  button([class("cursor-pointer"), on_click(ReleaseWakeLock)], [
-                    text("🔒"),
-                  ])
-                None ->
-                  button([class("cursor-pointer"), on_click(RequestWakeLock)], [
-                    text("🔓"),
-                  ])
-              }
-            },
-          ],
-        ),
-      ),
-  )
-}
-
-fn view_home(model: Model) -> List(Element(Msg)) {
+// Renders the main content for the home page, including sessions and an add form.
+fn view_ssr_home(sessions: List(GymSession)) -> List(Element(Nil)) {
+  let today_iso = date.to_iso_string(date.today())
   [
-    h1(
-      [
-        class(
-          "text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
-        ),
-      ],
-      [text("💪🤸‍♂️🏋️")],
-    ),
-    section(
-      [
-        class(
-          "mt-4 font-slab flex flex-col gap-4  col-[main-start_/_main-end] row-start-[content]",
-        ),
-      ],
-      [
-        case
-          list.find(model.sessions, fn(session) { session.date == date.today() })
-        {
-          Error(_) ->
-            button(
-              [
-                class(
-                  "bg-uchu-light-gray border-2 border-uchu-yin rounded-md overflow-hidden col-span-6 p-3 cursor-pointer flex gap-2 justify-start items-center",
-                ),
-                attribute.attribute("popovertarget", "session-template-picker"),
-              ],
-              [
-                h1([class("font-bold text-3xl")], [text("🟢 ")]),
-                h1([class("font-bold text-3xl")], [text("Start")]),
-              ],
-            )
-          Ok(_) ->
-            a(
-              [
-                class(
-                  "font-slab font-bold flex justify-start p-3 text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6 gap-2 items-center",
-                ),
-                attribute.href("/session/current"),
-              ],
-              [
-                h1([class("font-bold text-3xl")], [text("⌛ ")]),
-                h1([class("font-bold text-3xl")], [text("Session in progress")]),
-              ],
-            )
-        },
-        a(
-          [
-            class(
-              "bg-uchu-light-gray border-2 border-uchu-yin rounded-md overflow-hidden col-span-6 p-3 cursor-pointer flex gap-2 justify-start items-center",
-            ),
-            attribute.href("/review"),
-          ],
-          [
-            h1([class("font-bold text-3xl")], [text("🕵️ ")]),
-            h1([class("font-bold text-3xl")], [text("Review")]),
-          ],
-        ),
-      ],
-    ),
-    section(
-      [
-        class(
-          "mt-19 mb-16 font-slab bg-white p-2 row-start-2 h-full w-full overflow-y-auto",
-        ),
-        attribute("popover", ""),
-        id("session-template-picker"),
-      ],
-      [
-        div(
-          [class("flex flex-col gap-4")],
-          model.session_templates |> list.map(view_session_template_card),
-        ),
-      ],
-    ),
+    html.h1([class("text-5xl font-bold my-6 text-center text-indigo-600")], [html.text("JimGym Tracker")]),
+    html.section([class("mb-8 p-4 bg-white shadow-md rounded-lg")], [
+      html.h2([class("text-2xl font-semibold mb-4 text-gray-700")], [html.text("Add New Exercise Record")]),
+      html.form([action("/add-record"), method("POST"), class("space-y-4")], [
+        html.div([class("flex flex-col")], [
+          html.label([for("date"), class("mb-1 font-medium text-gray-600")], [html.text("Date:")]),
+          html.input([
+            type_("date"), id("date"), name("date"), value(today_iso),
+            class("p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"),
+          ]),
+        ]),
+        html.div([class("flex flex-col")], [
+          html.label([for("name"), class("mb-1 font-medium text-gray-600")], [html.text("Exercise Name:")]),
+          html.input([
+            type_("text"), id("name"), name("name"), attribute.required(True),
+            class("p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"),
+          ]),
+        ]),
+        html.div([class("grid grid-cols-1 md:grid-cols-3 gap-4")], [
+          html.div([class("flex flex-col")], [
+            html.label([for("reps"), class("mb-1 font-medium text-gray-600")], [html.text("Reps (optional):")]),
+            html.input([
+              type_("number"), id("reps"), name("reps"), step(1),
+              class("p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"),
+            ]),
+          ]),
+          html.div([class("flex flex-col")], [
+            html.label([for("weight"), class("mb-1 font-medium text-gray-600")], [html.text("Weight (kg, optional):")]),
+            html.input([
+              type_("number"), id("weight"), name("weight"), step("0.01"),
+              class("p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"),
+            ]),
+          ]),
+          html.div([class("flex flex-col")], [
+            html.label([for("duration"), class("mb-1 font-medium text-gray-600")], [html.text("Duration (mins, optional):")]),
+            html.input([
+              type_("number"), id("duration"), name("duration"), step(1),
+              class("p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"),
+            ]),
+          ]),
+        ]),
+        html.button([
+          type_("submit"), 
+          class("w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-150 ease-in-out")
+        ], [html.text("Add Record")]),
+      ]),
+    ]),
+    html.section([class("p-4 bg-white shadow-md rounded-lg")], [
+      html.h2([class("text-2xl font-semibold mb-4 text-gray-700")], [html.text("Recorded Sessions")]),
+      case sessions {
+        [] -> html.p([class("text-gray-500")], [html.text("No sessions recorded yet.")])
+        _ -> 
+          html.ul([class("space-y-6")], 
+            list.map(sessions, fn(session) {
+              html.li([class("p-4 border border-gray-200 rounded-lg bg-gray-50")], [
+                html.h3([class("text-xl font-semibold text-indigo-700 mb-2")], [
+                  html.text(date.format(session.date, "%A, %B %d, %Y") <> " " <> session.emoji)
+                ]),
+                html.ul([class("list-disc list-inside pl-4 space-y-1")],
+                  dict.to_list(session.exercises)
+                  |> list.flat_map(fn(item) {
+                    let exercise_name = item.0
+                    let exercises_list = item.1
+                    list.map(exercises_list, fn(ex) {
+                      let details_text = case ex {
+                        SetsExercise(_, reps, weight, _) -> " - " <> int.to_string(reps) <> " reps at " <> float.to_string(weight) <> "kg"
+                        TimedExercise(_, duration) -> " - " <> int.to_string(duration) <> " minutes"
+                      }
+                      html.li([class("text-gray-600")], [html.text(exercise_name <> details_text)])
+                    })
+                  })
+                )
+              ])
+            })
+          )
+      }
+    ]),
   ]
 }
 
-fn view_current_session_page(model: Model) -> List(Element(Msg)) {
-  case list.find(model.sessions, fn(session) { session.date == date.today() }) {
-    Error(_) -> [
-      h1(
-        [
-          class(
-            "font-slab text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
-          ),
-        ],
-        [text("No session today 😣")],
-      ),
-    ]
-    Ok(session) -> [
-      h1(
-        [
-          class(
-            "font-slab text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
-          ),
-        ],
-        [text(session.emoji <> " " <> session.date |> date.format("dd MMM yy"))],
-      ),
-      table(
-        [
-          class(
-            "px-2 row-start-[content] overflow-y-scroll gap-6 grid col-[main-start_/_main-end] subgrid-cols w-full text-sm",
-          ),
-        ],
-        [
-          tbody(
-            [class("grid grid-cols-6 col-[main-start_/_main-end]")],
-            session.exercises
-              |> dict.to_list
-              |> list.map(fn(group) {
-                group.1 |> list.index_map(view_exercise_input)
-              })
-              |> list.flatten,
-          ),
-        ],
-      ),
-    ]
-  }
-}
-
-//--VIEW HELPERS------------------------------------------------------------------
-
-fn view_session_template_card(template: common.SessionTemplate) -> Element(Msg) {
-  details(
-    [
-      class(
-        "bg-white border-2 font-hand border-uchu-yin rounded-md overflow-hidden",
-      ),
-    ],
-    [
-      summary(
-        [
-          class(
-            "p-3 bg-uchu-light-gray cursor-pointer flex justify-between items-center",
-          ),
-        ],
-        [
-          h3([class("font-slab font-bold text-3xl")], [
-            text(template.emoji <> " " <> template.name),
-          ]),
-        ],
-      ),
-      div([class("p-4 border-t border-uchu-yin")], [
-        table([class("w-full text-sm")], [
-          tbody(
-            [],
-            template.exercises
-              |> list.map(fn(exercise) {
-                case exercise {
-                  SetsExerciseTemplate(name, sets, reps, weight, rest) ->
-                    view_set_exercise_row(name, sets, reps, weight, rest)
-                  TimedExerciseTemplate(name, duration) ->
-                    view_timed_exercise_row(name, duration)
-                }
-              }),
-          ),
-        ]),
-        button(
-          [
-            class(
-              "mt-4 w-full p-2 bg-uchu-light-gray font-bold font-slab border cursor-pointer border-uchu-yin rounded-md",
-            ),
-            on_click(StartNewSession(Some(template))),
-          ],
-          [text("Start Session")],
-        ),
+// Renders the basic HTML page structure.
+fn view_ssr_page(page_content: List(Element(Nil))) -> Response {
+  let document = 
+    html.html([
+      lang("en"),
+      class("bg-gray-100 text-gray-800 font-sans text-lg scroll-smooth"),
+    ], [
+      html.head([], [
+        html.meta([html.charset("utf-8")]),
+        html.title([], [html.text("JimGym - SSR")]),
+        html.meta([name("viewport"), content("width=device-width, initial-scale=1")]),
+        html.link([rel("stylesheet"), href("/static/app.css")]),
       ]),
-    ],
-  )
+      html.body([class("container mx-auto p-4")], page_content),
+
+    ])
+
+  // The `element.map` above with `todo` means we are not handling any messages from these elements.
+  // For SSR, this is usually fine if there are no client-side interactions driven by Lustre messages.
+  let rendered_html = 
+    lustre.element.to_document_string(document)
+    |> string.replace("<!DOCTYPE html>", "") // Lustre adds this, remove if not desired or if Mist adds it.
+
+  wisp.html_response(rendered_html)
+  |> wisp.prepend_header("cache-control", "no-store, max-age=0, must-revalidate")
 }
 
-fn view_timed_exercise_row(name: String, duration: Int) {
-  tr([class("border-b border-gray-100")], [
-    td([class("py-1 text-center")], [text(int.to_string(duration) <> "m")]),
-    td([class("py-1")], [text(name)]),
-  ])
-}
 
-fn view_set_exercise_row(
-  name: String,
-  sets: Int,
-  reps: Int,
-  weight: Float,
-  rest: Int,
-) {
-  tr([class("border-b border-gray-100")], [
-    td([class("py-1 text-center")], [
-      text(int.to_string(sets) <> "×" <> int.to_string(reps)),
-    ]),
-    td([class("py-1")], [text(name)]),
-    td([class("py-1 text-center")], [
-      text(case weight {
-        0.0 -> ""
-        weight -> {
-          // Check if it's effectively an integer
-          let int_part = float.truncate(weight)
-          let decimal_part = weight -. int.to_float(int_part)
+// Server-side request handling
+fn handle_request(ctx: AppContext, request: Request) -> Response {
+  use req <- wisp.rescue_method_not_allowed(request)
+  use req <- wisp.rescue_unsupported_media_type(req)
+  use _ <- wisp.serve_static(req, under: "/static", from: "priv/static")
 
-          case decimal_part <. 0.01 || decimal_part >. 0.99 {
-            True -> int.to_string(int_part) <> "kg"
-            False -> {
-              // Format with one decimal place
-              let decimal_str =
-                decimal_part *. 10.0
-                |> float.round
-                |> int.to_string
+  let AppContext(actor_subject, http_client) = ctx
 
-              int.to_string(int_part) <> "." <> decimal_str <> "kg"
+  case req.method, req.path {
+    wisp.Get, "/" -> {
+      let sessions = exercise_actor.get_sessions(actor_subject)
+      // io.debug("Fetched sessions from actor: " <> string.inspect(sessions))
+      view_ssr_page(view_ssr_home(sessions))
+    }
+    wisp.Post, "/add-record" -> {
+      // io.debug("POST /add-record received")
+      // Parse form data
+      use form_data <- result.try(wisp.parse_body_form(req))
+      // io.debug("Form data: " <> string.inspect(form_data))
+
+      let date_str = dict.get(form_data, "date") |> result.unwrap_or("")
+      let name_str = dict.get(form_data, "name") |> result.unwrap_or("")
+      let reps_str = dict.get(form_data, "reps") |> result.unwrap_or("")
+      let weight_str = dict.get(form_data, "weight") |> result.unwrap_or("")
+      let duration_str = dict.get(form_data, "duration") |> result.unwrap_or("")
+
+      // Validate and construct ExerciseRecord
+      // Basic validation: name and date must be present
+      case name_str == "" || date_str == "" {
+        True -> wisp.bad_request_response("Name and Date are required.")
+        False -> {
+          let reps_opt = case string.is_empty(reps_str) { True -> None False -> int.parse(reps_str) |> result.to_option }
+          let weight_opt = case string.is_empty(weight_str) { True -> None False -> float.parse(weight_str) |> result.to_option }
+          let duration_opt = case string.is_empty(duration_str) { True -> None False -> int.parse(duration_str) |> result.to_option }
+
+          let record = ExerciseRecord(
+            date: date_str, 
+            name: name_str, 
+            reps: reps_opt, 
+            weight: weight_opt, 
+            duration: duration_opt
+          )
+          // io.debug("Constructed record: " <> string.inspect(record))
+
+          case supabase_client.add_exercise_record(http_client, record) {
+            Ok(_) -> {
+              // io.debug("Record added to Supabase. Refreshing actor state.")
+              // Refresh actor state by fetching all sessions again
+              case supabase_client.fetch_all_gym_sessions(http_client) {
+                Ok(all_sessions) -> exercise_actor.set_initial_sessions(actor_subject, all_sessions)
+                Error(fetch_err) -> io.debug("Error fetching sessions after add: " <> string.inspect(fetch_err))
+              }
+              wisp.redirect_response("/", wisp.Found) // 302 Found
+            }
+            Error(add_err) -> {
+              io.debug("Error adding record to Supabase: " <> string.inspect(add_err))
+              // Consider showing an error page or message
+              wisp.html_response("<html><body><h1>Error adding record.</h1><p>" <> string.inspect(add_err) <> "</p><a href='/'>Go back</a></body></html>")
+              |> wisp.set_status(500)
             }
           }
         }
-      }),
-    ]),
-    td([class("py-1 text-center")], [text(int.to_string(rest) <> "s")]),
-  ])
-}
-
-fn view_exercise_input(exercise: Exercise, index: Int) -> Element(Msg) {
-  case exercise {
-    SetsExercise(name, reps, weight, rest) ->
-      tr([class("border-b border-gray-100 col-span-6 subgrid-cols gap-1")], [
-        td(
-          [
-            class(
-              "text-center col-start-1 col-span-1 items-center flex justify-center",
-            ),
-          ],
-          [
-            html.input([
-              case reps |> int.to_string |> string.length < 2 {
-                True -> attribute.style([#("padding-left", "1ch")])
-                False -> attribute.none()
-              },
-              class("w-[2ch]"),
-              type_("number"),
-              attribute.step("1"),
-              attribute.value(reps |> int.to_string),
-              event.on_input(fn(input) {
-                UpdatedExerciseAtIndex(
-                  index,
-                  common.SetsExercise(
-                    ..exercise,
-                    reps: input |> int.parse |> result.unwrap(0),
-                  ),
-                )
-              }),
-            ]),
-          ],
-        ),
-        td(
-          [
-            class(
-              "text-center col-start-2 items-center col-span-2 flex justify-start",
-            ),
-          ],
-          [text(name)],
-        ),
-        td(
-          [
-            class(
-              "text-center col-start-4 items-center col-span-1 flex justify-end",
-            ),
-          ],
-          [
-            html.input([
-              class("w-[3.5ch]"),
-              type_("number"),
-              attribute.step("0.5"),
-              event.on_input(fn(input) {
-                echo input
-                UpdatedExerciseAtIndex(
-                  index,
-                  common.SetsExercise(
-                    ..exercise,
-                    weight: input
-                      |> common.float_parse_tolerant,
-                  ),
-                )
-              }),
-              attribute.value(weight |> float.to_string),
-            ]),
-            text("kg"),
-          ],
-        ),
-        td(
-          [
-            class(
-              "text-center col-start-5 items-center col-span-2 flex justify-evenly",
-            ),
-          ],
-          [
-            button([class(""), on_click(ShowTimer(rest))], [
-              text(rest |> int.to_string <> "s ⌛"),
-            ]),
-            button(
-              [
-                class(""),
-                on_click(RemoveSetFromCurrentSessionExercises(index, name)),
-              ],
-              [text("❎")],
-            ),
-          ],
-        ),
-      ])
-    TimedExercise(name, duration) ->
-      tr([class("border-b border-gray-100")], [
-        td([class("py-1 text-center")], [
-          html.input([
-            class(""),
-            type_("number"),
-            attribute.value(duration |> int.to_string),
-            event.on_input(fn(input) {
-              UpdatedExerciseAtIndex(
-                index,
-                common.TimedExercise(
-                  ..exercise,
-                  duration: input |> int.parse |> result.unwrap(0),
-                ),
-              )
-            }),
-          ]),
-          text("m"),
-        ]),
-        td([class("py-1")], [text(name)]),
-        button([class(""), on_click(ShowTimer(duration * 60))], [
-          text(format_time(duration * 60) <> "s ⌛"),
-        ]),
-        button(
-          [
-            class(""),
-            on_click(RemoveSetFromCurrentSessionExercises(index, name)),
-          ],
-          [text("❎")],
-        ),
-      ])
+      }
+    }
+    _, _ -> wisp.not_found_response("Page not found.")
   }
 }
 
-// ----- MAIN & UTILS -----------------------------------------------------------------
+// -- ROUTING -- // SSR does not use client-side routing in the same way.
 
+// -- HTTP Requests & Local Storage -- These will be handled server-side or differently in SSR.
+
+// -- MAIN --
 pub fn main() {
-  let app = lustre.application(init, update, view)
-  let assert Ok(_) = lustre.start(app, "#app", Nil)
+  // Initialize Supabase client and ExerciseActor
+  let assert Ok(http_client) = client.new()
+  let actor_subject = exercise_actor.start() // exercise_actor.start() now returns Subject(Msg) and panics on error
+  let app_context = AppContext(actor_subject: actor_subject, http_client: http_client)
+
+  // Fetch initial data from Supabase and populate the actor
+  case supabase_client.fetch_all_gym_sessions(http_client) { // Corrected to use http_client
+    Ok(initial_sessions) -> {
+      // io.debug("Fetched initial sessions: " <> string.inspect(initial_sessions))
+      exercise_actor.set_initial_sessions(actor_pid, initial_sessions)
+    }
+    Error(err) -> {
+      io.debug("Failed to fetch initial sessions: " <> string.inspect(err))
+      // Proceed without initial data, or handle error as appropriate
+    }
+  }
+  
+  let service_handler = fn(req: Request, app_data: AppContext) -> Response {
+    handle_request(app_data, req)
+  }
+
+  let get_app_data = fn(_wisp_context: wisp.WispContext) -> AppContext {
+    app_context
+  }
+
+  let service = wisp_mist.service(service_handler, get_app_data)
+  let assert Ok(_) = mist.serve_on_port(service, address: "0.0.0.0", port: 8080)
+  process.sleep_forever()
 }
 
-fn convert_template_to_sets(
-  template: ExerciseTemplate,
+
+// Helper function to create exercises from a session template
+fn exercises_from_template(
+  template: common.SessionTemplate,
 ) -> #(String, List(Exercise)) {
   #(template.name, case template {
     SetsExerciseTemplate(name, sets, reps, weight, rest) ->
@@ -858,97 +309,3 @@ fn convert_template_to_sets(
   })
 }
 
-fn format_time(seconds: Int) -> String {
-  let minutes = seconds / 60
-  let remaining_seconds = seconds % 60
-  minutes |> int.to_string <> ":" <> remaining_seconds |> int.to_string
-}
-
-//-----BROWSER ------------------------------------------------------------------------
-
-@external(javascript, "./browser.ffi.mjs", "do_stop_audio")
-pub fn stop_audio(audio: audio.Audio) -> Nil
-
-pub type WakeLockSentinel
-
-@external(javascript, "./browser.ffi.mjs", "requestWakeLock")
-pub fn request_wake_lock() -> Promise(Result(WakeLockSentinel, String))
-
-@external(javascript, "./browser.ffi.mjs", "releaseWakeLock")
-pub fn release_wake_lock(sentinel: WakeLockSentinel) -> Nil
-
-//-----DB --------------------------------------------------------------------------
-
-fn flatten_session(session: common.GymSession) -> List(common.ExerciseRecord) {
-  dict.values(session.exercises)
-  |> list.flatten
-  |> list.map(fn(exercise) {
-    case exercise {
-      SetsExercise(name, reps, weight, _rest) ->
-        ExerciseRecord(
-          date: session.date |> date.to_iso_string,
-          name: name,
-          reps: Some(reps),
-          weight: Some(weight),
-          duration: None,
-        )
-      TimedExercise(name, duration) ->
-        ExerciseRecord(
-          date: session.date |> date.to_iso_string,
-          name: name,
-          reps: None,
-          weight: None,
-          duration: Some(duration),
-        )
-    }
-  })
-}
-
-fn group_records_into_sessions(
-  records: List(common.ExerciseRecord),
-) -> List(common.GymSession) {
-  records
-  |> list.group(fn(record) { record.date })
-  |> dict.map_values(fn(date, inner_records) {
-    GymSession(
-      date: date
-        |> date.from_iso_string
-        |> result.unwrap(date.from_calendar_date(1970, date.Jan, 1)),
-      exercises: inner_records
-        |> list.map(fn(record) {
-          case record.duration {
-            None ->
-              common.SetsExercise(
-                record.name,
-                option.unwrap(record.reps, 0),
-                option.unwrap(record.weight, 0.0),
-                rest: 0,
-              )
-            Some(duration) -> common.TimedExercise(record.name, duration)
-          }
-        })
-        |> list.group(fn(exercise) { exercise.name }),
-      emoji: "",
-    )
-  })
-  |> dict.values
-}
-
-fn save_session(session: common.GymSession) -> Promise(Result(Nil, String)) {
-  session |> flatten_session |> do_insert_exercise_records
-}
-
-@external(javascript, "./db.ffi.mjs", "do_insert_exercise_records")
-pub fn do_insert_exercise_records(
-  records: List(common.ExerciseRecord),
-) -> Promise(Result(Nil, String))
-
-fn retrieve_sessions() -> Promise(Result(List(common.GymSession), String)) {
-  do_retrieve_exercise_records()
-  |> promise.map(result.map(_, group_records_into_sessions))
-}
-
-@external(javascript, "./db.ffi.mjs", "do_retrieve_exercise_records")
-pub fn do_retrieve_exercise_records() -> Promise(
-  Result(List(common.ExerciseRecord), String),
-)

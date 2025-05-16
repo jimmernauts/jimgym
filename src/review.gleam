@@ -215,7 +215,7 @@ pub fn view_calendar_day(
       {
         case starting_column {
           "" -> attribute.none()
-          _ -> attribute.style([#("grid-column-start", starting_column)])
+          _ -> attribute.styles([#("grid-column-start", starting_column)])
         }
       },
     ],
@@ -281,7 +281,7 @@ pub fn generate_calendar_tiles(
             _ ->
               html.article(
                 [
-                  attribute.style([
+                  attribute.styles([
                     #(
                       "grid-column",
                       "span "
