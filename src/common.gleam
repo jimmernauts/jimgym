@@ -1,7 +1,8 @@
 import gleam/dict.{type Dict}
 import gleam/float
+import gleam/int
 import gleam/list
-import gleam/option.{type Option}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import rada/date
@@ -43,6 +44,7 @@ pub type ExerciseRecord {
 pub type GymSession {
   GymSession(
     date: date.Date,
+    session_name: String,
     // Rata die
     exercises: Dict(String, List(Exercise)),
     emoji: String,
@@ -62,4 +64,46 @@ pub fn float_parse_tolerant(string: String) -> Float {
     True -> string |> float.parse |> result.unwrap(0.0)
     False -> { string <> ".0" } |> float.parse |> result.unwrap(0.0)
   }
+}
+
+pub fn group_records_into_exercises(
+  records: List(ExerciseRecord),
+) -> Dict(String, List(Exercise)) {
+  records
+  |> list.map(fn(record) {
+    case record.duration {
+      None ->
+        SetsExercise(
+          record.name,
+          option.unwrap(record.reps, 0),
+          option.unwrap(record.weight, 0.0),
+          rest: 0,
+        )
+      Some(duration) -> TimedExercise(record.name, duration)
+    }
+  })
+  |> list.group(fn(exercise) { exercise.name })
+}
+
+pub fn flatten_errors(results: List(Result(a, b))) -> Result(Nil, List(b)) {
+  let errors =
+    list.fold(results, [], fn(acc, result) {
+      case result {
+        Ok(_) -> acc
+        Error(e) -> [e, ..acc]
+      }
+    })
+    // Reverse the list of errors to maintain the original order
+    |> list.reverse
+
+  case errors {
+    [] -> Ok(Nil)
+    _ -> Error(errors)
+  }
+}
+
+pub fn format_time(seconds: Int) -> String {
+  let minutes = seconds / 60
+  let remaining_seconds = seconds % 60
+  minutes |> int.to_string <> ":" <> remaining_seconds |> int.to_string
 }
