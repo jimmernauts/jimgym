@@ -517,6 +517,9 @@
     }
   }
 }
+@view-transition {
+  navigation: auto;
+}
 @property --tw-border-style {
   syntax: "*";
   inherits: false;

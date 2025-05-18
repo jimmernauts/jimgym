@@ -33,7 +33,7 @@ pub type Exercise {
 
 pub type ExerciseRecord {
   ExerciseRecord(
-    date: String,
+    date: date.Date,
     name: String,
     reps: Option(Int),
     weight: Option(Float),

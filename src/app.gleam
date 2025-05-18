@@ -2,7 +2,6 @@ import common.{
   type Exercise, ExerciseRecord, GymSession, SessionTemplate, SetsExercise,
   SetsExerciseTemplate, TimedExercise, TimedExerciseTemplate,
 }
-import exercise_actor
 import gleam/bool
 import gleam/dict.{type Dict}
 import gleam/erlang/process
@@ -27,6 +26,7 @@ import pages/list_sessions.{list_sessions}
 import pages/new_session.{new_session}
 import pog
 import rada/date
+import session_actor
 import supabase_client
 import wisp.{type Request, type Response}
 import wisp/wisp_mist
@@ -35,16 +35,17 @@ import wisp/wisp_mist
 pub fn main() {
   let assert Ok(db) = supabase_client.connect_db()
 
-  // Fetch initial data from Supabase
-  let model =
-    supabase_client.get_all_sessions(db)
-    |> result.unwrap([])
+  let actor = session_actor.start()
+  supabase_client.get_all_sessions(db)
+  |> echo
+  |> result.unwrap([])
+  |> session_actor.set_sessions(actor)
 
   wisp.configure_logger()
   let secret_key_base = wisp.random_string(64)
 
   let assert Ok(_) =
-    wisp_mist.handler(handle_request(_, model, db), secret_key_base)
+    wisp_mist.handler(handle_request(_, actor, db), secret_key_base)
     |> mist.new
     |> mist.port(8000)
     |> mist.start_http
@@ -54,16 +55,47 @@ pub fn main() {
 
 pub fn handle_request(
   req: Request,
-  model: List(common.GymSession),
+  actor: process.Subject(session_actor.Msg),
   db: pog.Connection,
 ) -> Response {
+  let model = session_actor.get_sessions(actor)
   let assert Ok(priv) = wisp.priv_directory("app")
   use <- wisp.log_request(req)
   use <- wisp.serve_static(req, under: "/", from: priv <> "/static")
   case wisp.path_segments(req) {
     [] -> view(home(req, model))
-    ["sessions"] -> view(list_sessions(req, model))
-    ["session", "new"] -> new_session(req, db)
+    ["sessions"] -> {
+      let year = date.today() |> date.year
+      let month = date.today() |> date.month_number
+
+      view(list_sessions(
+        req,
+        model
+          |> list.filter(fn(session) {
+            session.date |> date.month_number == month
+            && session.date |> date.year == year
+          }),
+        year,
+        month,
+      ))
+    }
+    ["sessions", year, month] -> {
+      let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
+      let month =
+        month |> int.parse |> result.unwrap(date.today() |> date.month_number)
+
+      view(list_sessions(
+        req,
+        model
+          |> list.filter(fn(session) {
+            session.date |> date.month_number == month
+            && session.date |> date.year == year
+          }),
+        year,
+        month,
+      ))
+    }
+    ["session", "new"] -> new_session(req, actor, db)
     ["session", date] ->
       case
         list.find(model, fn(session) {
@@ -355,7 +387,7 @@ fn flatten_session(session: common.GymSession) -> List(common.ExerciseRecord) {
     case exercise {
       SetsExercise(name, reps, weight, _rest) ->
         ExerciseRecord(
-          date: session.date |> date.to_iso_string,
+          date: session.date,
           name: name,
           reps: Some(reps),
           weight: Some(weight),
@@ -363,7 +395,7 @@ fn flatten_session(session: common.GymSession) -> List(common.ExerciseRecord) {
         )
       TimedExercise(name, duration) ->
         ExerciseRecord(
-          date: session.date |> date.to_iso_string,
+          date: session.date,
           name: name,
           reps: None,
           weight: None,

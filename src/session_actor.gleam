@@ -1,26 +1,24 @@
-import gleam/otp/actor
-import gleam/erlang/process.{type Subject}
-import gleam/result
 import common.{type GymSession}
+import gleam/erlang/process.{type Subject}
+import gleam/otp/actor
+import gleam/result
+import pog
+import supabase_client
 
 // The state of our actor is a list of gym sessions
-pub type State = List(GymSession)
+pub type State =
+  List(GymSession)
 
 // Messages that can be sent to the actor
 pub type Msg {
-  SetInitialSessions(sessions: List(GymSession))
-  AddSession(session: GymSession)
+  SetSessions(sessions: List(GymSession))
   GetSessions(reply_to: process.Subject(List(GymSession)))
 }
 
 // Handle incoming messages
 fn handle_message(msg: Msg, state: State) -> actor.Next(Msg, State) {
   case msg {
-    SetInitialSessions(sessions) -> actor.continue(sessions)
-    AddSession(session) -> {
-      let new_state = [session, ..state]
-      actor.continue(new_state)
-    }
+    SetSessions(sessions) -> actor.continue(sessions)
     GetSessions(reply_channel) -> {
       process.send(reply_channel, state)
       actor.continue(state)
@@ -40,23 +38,29 @@ pub fn start() -> process.Subject(Msg) {
 // --- Client functions to interact with the actor ---
 
 // Set the initial list of gym sessions (e.g., loaded from a database)
-pub fn set_initial_sessions(
-  actor_subject: process.Subject(Msg),
+pub fn set_sessions(
   sessions: List(GymSession),
-) -> Nil {
-  actor.send(actor_subject, SetInitialSessions(sessions))
-}
-
-// Add a new gym session
-pub fn add_session(
   actor_subject: process.Subject(Msg),
-  session: GymSession,
 ) -> Nil {
-  actor.send(actor_subject, AddSession(session))
+  actor.send(actor_subject, SetSessions(sessions))
 }
 
 // Get all gym sessions
 pub fn get_sessions(actor_subject: process.Subject(Msg)) -> List(GymSession) {
-  process.try_call(actor_subject, fn(reply_channel) { GetSessions(reply_channel) }, 5000)
-  |> result.unwrap(or: []) // Return an empty list in case of error or timeout
+  process.try_call(
+    actor_subject,
+    fn(reply_channel) { GetSessions(reply_channel) },
+    5000,
+  )
+  |> result.unwrap(or: [])
+  // Return an empty list in case of error or timeout
+}
+
+pub fn refresh_sessions(
+  actor_subject: process.Subject(Msg),
+  db: pog.Connection,
+) -> Nil {
+  supabase_client.get_all_sessions(db)
+  |> result.unwrap([])
+  |> set_sessions(actor_subject)
 }

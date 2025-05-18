@@ -26,15 +26,15 @@ pub fn connect_db() -> Result(pog.Connection, DbError) {
 
 pub fn get_all_sessions(
   db: pog.Connection,
-) -> Result(List(common.GymSession), DbError) {
+) -> Result(List(common.GymSession), List(DbError)) {
   let exercise_record_decoder = {
-    use date <- decode.field(0, decode.string)
+    use date <- decode.field(0, pog.date_decoder())
     use name <- decode.field(1, decode.string)
-    use weight <- decode.field(2, decode.optional(decode.float))
-    use reps <- decode.field(3, decode.optional(decode.int))
+    use reps <- decode.field(2, decode.optional(decode.int))
+    use weight <- decode.field(3, decode.optional(decode.float))
     use duration <- decode.field(4, decode.optional(decode.int))
     decode.success(common.ExerciseRecord(
-      date: date,
+      date: date |> from_pog_date,
       name: name,
       reps: reps,
       weight: weight,
@@ -42,25 +42,51 @@ pub fn get_all_sessions(
     ))
   }
 
-  let row_decoder = {
-    use date <- decode.field(0, decode.string)
+  let gym_session_decoder = {
+    use date <- decode.field(0, pog.date_decoder())
     use session_name <- decode.field(1, decode.string)
     use emoji <- decode.field(2, decode.string)
-    use exercises <- decode.field(3, decode.list(exercise_record_decoder))
     decode.success(common.GymSession(
-      date: date
-        |> date.from_iso_string
-        |> result.unwrap(date.from_calendar_date(1970, date.Jan, 1)),
+      date: date |> from_pog_date,
       session_name: session_name,
       emoji: emoji,
-      exercises: exercises |> common.group_records_into_exercises,
+      exercises: dict.new(),
     ))
   }
-  let query = pog.query(get_all_sessions_query) |> pog.returning(row_decoder)
+  let sessions_query =
+    pog.query(get_sessions_query) |> pog.returning(gym_session_decoder)
 
-  pog.execute(query, db)
-  |> result.map(fn(returned_data) { returned_data.rows })
-  |> result.map_error(fn(err) { QueryError(err) })
+  let exercises_query =
+    pog.query(get_exercises_query) |> pog.returning(exercise_record_decoder)
+
+  let sessions =
+    pog.execute(sessions_query, db)
+    |> result.map(fn(returned_data) { returned_data.rows })
+    |> result.map_error(fn(err) { QueryError(err) })
+
+  let exercise_records =
+    pog.execute(exercises_query, db)
+    |> result.map(fn(returned_data) { returned_data.rows })
+    |> result.map_error(fn(err) { QueryError(err) })
+
+  case sessions, exercise_records {
+    Ok(sessions), Ok(exercise_records) ->
+      sessions
+      |> list.map(fn(session) {
+        let exercises =
+          list.filter(exercise_records, fn(exercise) {
+            exercise.date == session.date
+          })
+        common.GymSession(
+          ..session,
+          exercises: exercises |> common.group_records_into_exercises,
+        )
+      })
+      |> Ok
+    Error(a), Ok(_) -> Error([a])
+    Ok(_), Error(b) -> Error([b])
+    Error(a), Error(b) -> Error([a, b])
+  }
 }
 
 pub fn insert_session(
@@ -116,21 +142,21 @@ pub fn insert_session(
   |> echo
 }
 
-const get_all_sessions_query = "SELECT
-    g.session_name,
+const get_sessions_query = "SELECT
     g.date,
-    g.emoji,
-    array_agg(
-      ROW(e.name, e.weight, e.duration, e.reps)
-    ) AS exercises
+    g.session_name,
+    g.emoji
   FROM
-    gym_sessions g
-  LEFT JOIN
-    exercise_records e ON g.date = e.date
-  GROUP BY
-    g.session_name,
-    g.date,
-    g.emoji;"
+    gym_sessions g"
+
+const get_exercises_query = "SELECT
+    e.date,
+    e.name,
+    e.reps,
+    e.weight,
+    e.duration
+  FROM
+    exercise_records e"
 
 const insert_sessions_query = "INSERT INTO gym_sessions (date, session_name, emoji)
 VALUES ($1, $2, $3);"
@@ -145,4 +171,12 @@ fn to_pog_date(date: date.Date) -> pog.Value {
     date.day(date),
   )
   |> pog.date
+}
+
+fn from_pog_date(date: pog.Date) -> date.Date {
+  date.from_calendar_date(
+    date.year,
+    date.month |> date.number_to_month,
+    date.day,
+  )
 }
