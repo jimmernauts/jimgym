@@ -107,14 +107,14 @@ pub fn insert_session(
       case exercise {
         common.SetsExercise(name, reps, weight) ->
           pog.query(insert_records_query)
-          |> pog.parameter(session.date |> date.to_iso_string |> pog.text)
+          |> pog.parameter(session.date |> to_pog_date)
           |> pog.parameter(name |> pog.text)
           |> pog.parameter(reps |> pog.int)
           |> pog.parameter(weight |> pog.float)
           |> pog.parameter(pog.null())
         common.TimedExercise(name, duration) ->
           pog.query(insert_records_query)
-          |> pog.parameter(session.date |> date.to_iso_string |> pog.text)
+          |> pog.parameter(session.date |> to_pog_date)
           |> pog.parameter(name |> pog.text)
           |> pog.parameter(pog.null())
           |> pog.parameter(pog.null())

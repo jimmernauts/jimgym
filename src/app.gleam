@@ -41,6 +41,9 @@ pub fn main() {
   |> result.unwrap([])
   |> cache.set_sessions(actor)
 
+  session_templates
+  |> cache.set_templates(actor)
+
   wisp.configure_logger()
   let secret_key_base = wisp.random_string(64)
 
@@ -332,9 +335,7 @@ fn view_session_template_card(template: common.SessionTemplate) -> Element(a) {
             class(
               "mt-4 w-full p-2 bg-uchu-light-gray font-bold font-slab border cursor-pointer border-uchu-yin rounded-md",
             ),
-            attribute.href(
-              "/new?template=" <> template.name <> "&emoji=" <> template.emoji,
-            ),
+            attribute.href("/new?template=" <> template.name),
           ],
           [text("Start Session")],
         ),
@@ -408,13 +409,3 @@ fn flatten_session(session: common.GymSession) -> List(common.ExerciseRecord) {
     }
   })
 }
-// Helper function to create exercises from a session template
-//fn exercises_from_template(
-//  template: common.SessionTemplate,
-//) -> #(String, List(Exercise)) {
-//  #(template.name, case template {
-//    SetsExerciseTemplate(name, sets, reps, weight, rest) ->
-//      list.repeat(SetsExercise(name, reps, weight, rest), sets)
-//    TimedExerciseTemplate(name, duration) -> [TimedExercise(name, duration)]
-//  })
-//}

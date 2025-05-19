@@ -110,3 +110,20 @@ pub fn group_exercises_by_sets(exercises: List(Exercise)) {
     })
   counts
 }
+
+// Helper function to create exercises from a session template
+pub fn exercises_from_template(
+  template_exercises: List(ExerciseTemplate),
+) -> dict.Dict(String, List(Exercise)) {
+  let template_to_concrete = fn(template: ExerciseTemplate) -> List(Exercise) {
+    case template {
+      SetsExerciseTemplate(name, sets, reps, weight) ->
+        list.repeat(SetsExercise(name, reps, weight), sets)
+      TimedExerciseTemplate(name, duration) -> [TimedExercise(name, duration)]
+    }
+  }
+  template_exercises
+  |> list.map(template_to_concrete)
+  |> list.flatten
+  |> list.group(fn(exercise) { exercise.name })
+}

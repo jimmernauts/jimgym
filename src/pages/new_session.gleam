@@ -17,39 +17,75 @@ pub fn new_session(
   db: pog.Connection,
 ) -> Response {
   echo "new session req"
-  echo req
   let template_name =
     wisp.get_query(req)
     |> list.key_find("template")
-    |> result.unwrap("No template")
-
-  let emoji =
-    wisp.get_query(req)
-    |> list.key_find("emoji")
-    |> result.unwrap("⁉️")
-
-  let res =
-    supabase_client.insert_session(
-      db,
+  let templates = cache.get_templates(actor)
+  let find_template_in_cache = fn(template_name: String) -> Result(
+    common.SessionTemplate,
+    Nil,
+  ) {
+    list.find(templates, fn(template: common.SessionTemplate) {
+      template.name == template_name
+    })
+  }
+  let sessions = cache.get_sessions(actor)
+  let get_last_session_matching_template = fn(template: common.SessionTemplate) -> Result(
+    common.GymSession,
+    Nil,
+  ) {
+    list.find(sessions, fn(session: common.GymSession) {
+      session.session_name == template.name
+    })
+  }
+  let fallback_session = fn() -> Result(common.GymSession, Nil) {
+    template_name
+    |> result.try(find_template_in_cache)
+    |> result.map(fn(t) { #(t.name, t.emoji, t.exercises) })
+    |> result.map(fn(t) {
       common.GymSession(
         date: date.today(),
-        session_name: template_name,
-        emoji: emoji,
-        exercises: dict.new(),
-      ),
-    )
-
-  case res {
-    Ok(_) -> {
-      cache.refresh_sessions(actor, db)
-      wisp.redirect(
-        date.today() |> date.year |> int.to_string
-        <> "/"
-        <> date.today() |> date.month_number |> int.to_string
-        <> "/"
-        <> date.today() |> date.day |> int.to_string,
+        session_name: t.0,
+        emoji: t.1,
+        exercises: t.2 |> common.exercises_from_template,
       )
-    }
-    Error(_) -> wisp.internal_server_error()
+    })
   }
+
+  let insert_session = fn(matching_session: common.GymSession) -> Result(
+    Nil,
+    List(supabase_client.DbError),
+  ) {
+    let new_session =
+      common.GymSession(
+        date: date.today(),
+        session_name: matching_session.session_name,
+        emoji: matching_session.emoji,
+        exercises: matching_session.exercises,
+      )
+    supabase_client.insert_session(db, new_session)
+  }
+
+  let return_response = fn(result: Result(a, b)) -> Response {
+    cache.refresh_sessions(actor, db)
+    case result {
+      Ok(_) ->
+        wisp.redirect(
+          date.today() |> date.year |> int.to_string
+          <> "/"
+          <> date.today() |> date.month_number |> int.to_string
+          <> "/"
+          <> date.today() |> date.day |> int.to_string,
+        )
+      Error(_) -> wisp.internal_server_error()
+    }
+  }
+
+  template_name
+  |> result.try(find_template_in_cache)
+  |> result.try(get_last_session_matching_template)
+  |> result.lazy_or(fallback_session)
+  |> result.map(insert_session)
+  |> result.map(return_response)
+  |> result.unwrap(wisp.internal_server_error())
 }
