@@ -3,7 +3,7 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/result
-import lustre/attribute.{class, href, style, type_}
+import lustre/attribute.{class, href, id, style, type_}
 import lustre/element.{type Element}
 import lustre/element/html.{
   a, article, button, div, h1, p, section, summary, table, tbody, td, text, tr,
@@ -52,70 +52,50 @@ pub fn list_sessions(
           _,
         )
         |> list.append(
-          generate_calendar_tiles(
-            month |> date.number_to_month,
-            year,
-            model |> list.map(fn(session) { session.date }),
-          )
-          // |> common.list_append_one(view_session_history(model))
+          generate_calendar_tiles(month |> date.number_to_month, year, model)
           |> common.list_append_one(
-            html.nav([class("col-span-7 subgrid-cols row-span-1")], [
-              a(
-                [
-                  class("col-span-1 col-start-1"),
-                  type_("button"),
-                  href("/sessions/" <> prev_month(month, year)),
-                ],
-                [text("<")],
-              ),
-              html.button(
-                [
-                  class("col-span-1 col-start-7"),
-                  type_("button"),
-                  href("/sessions/" <> next_month(month, year)),
-                ],
-                [text(">")],
-              ),
-            ]),
+            div([class("hidden"), id("mini_details")], []),
+          )
+          |> common.list_append_one(
+            html.nav(
+              [class("col-span-7 subgrid-cols row-span-1"), id("calendar_nav")],
+              [
+                a(
+                  [
+                    class(
+                      "col-span-1 col-start-1 self-center justify-self-center",
+                    ),
+                    href("/" <> prev_month(month, year)),
+                  ],
+                  [text("<")],
+                ),
+                a(
+                  [
+                    class(
+                      "col-span-1 col-start-7 self-center justify-self-center",
+                    ),
+                    href("/" <> next_month(month, year)),
+                  ],
+                  [text(">")],
+                ),
+              ],
+            ),
           ),
         ),
     ),
   ]
 }
 
-// TODO: how to add small client-side interactivity for this
-//
-// pub fn view_session_history(model: List(common.GymSession)) -> Element(a) {
-//   case model.selected_session {
-//     None -> element.none()
-//     Some(session) ->
-//       section(
-//         [class("mt-4 row-start-8 row-span-1 col-span-7 overflow-y-scroll")],
-//         [
-//           table([class("w-full text-sm")], [
-//             tbody(
-//               [],
-//               session.exercises
-//                 |> dict.values
-//                 |> list.map(view_exercise_history_group)
-//                 |> list.flatten,
-//             ),
-//           ]),
-//         ],
-//       )
-//   }
-// }
-
 pub fn view_exercise_history_group(
   exercises: List(common.Exercise),
 ) -> List(Element(a)) {
-  group_exercises_by_sets(exercises)
+  common.group_exercises_by_sets(exercises)
   |> list.map(view_exercise_history)
 }
 
 pub fn view_exercise_history(sets: #(Int, common.Exercise)) -> Element(a) {
   case sets.1 {
-    common.SetsExercise(name, reps, weight, _rest) ->
+    common.SetsExercise(name, reps, weight) ->
       tr([class("border-b border-gray-100")], [
         td([class("py-1 text-center")], [
           text(int.to_string(sets.0) <> "×" <> int.to_string(reps)),
@@ -157,49 +137,57 @@ pub fn view_exercise_history(sets: #(Int, common.Exercise)) -> Element(a) {
 pub fn view_calendar_day(
   day: date.Date,
   starting_column: String,
-  has_session: Bool,
+  emoji: String,
 ) -> Element(a) {
   article(
-    [
-      class("col-span-1 grid grid-rows-2 justify-center"),
-      // case has_session {
-      //   True -> event.on_click(UserSelectedSessionDate(day))
-      //   False -> attribute.none()
-      // },
-      {
-        case starting_column {
-          "" -> attribute.none()
-          _ -> attribute.styles([#("grid-column-start", starting_column)])
-        }
-      },
-    ],
+    {
+      list.flatten([
+        [
+          class("col-span-1 grid grid-rows-2 justify-center"),
+          {
+            case starting_column {
+              "" -> attribute.none()
+              _ -> attribute.styles([#("grid-column-start", starting_column)])
+            }
+          },
+        ],
+        case emoji {
+          "" -> []
+          _ -> [
+            attribute.style("cursor", "pointer"),
+            attribute.attribute(
+              "fx-action",
+              "/"
+                <> int.to_string(day |> date.year)
+                <> "/"
+                <> int.to_string(day |> date.month_number)
+                <> "/"
+                <> int.to_string(day |> date.day)
+                <> "?mini",
+            ),
+            attribute.attribute("fx-swap", "outerHTML"),
+            attribute.attribute("fx-target", "#mini_details"),
+          ]
+        },
+      ])
+    },
     [
       div([class("row-start-1 flex justify-center")], [
         text(day |> date.day |> int.to_string),
       ]),
       div([class("row-start-2 flex justify-center")], [
-        case has_session {
-          True -> text("💪")
-          False -> text(" ")
+        case emoji {
+          "" -> element.none()
+          _ -> text(emoji)
         },
       ]),
     ],
   )
 }
 
-pub fn group_exercises_by_sets(exercises: List(common.Exercise)) {
-  let uniques = exercises |> list.unique
-  let counts =
-    uniques
-    |> list.map(fn(exercise) {
-      #(exercises |> list.count(fn(e) { e == exercise }), exercise)
-    })
-  counts
-}
-
 pub fn generate_days_in_month(month: date.Month, year: Int) -> List(date.Date) {
-  let start = date.from_calendar_date(year, month, 1) |> echo
-  let end = start |> date.add(1, date.Months) |> echo
+  let start = date.from_calendar_date(year, month, 1)
+  let end = start |> date.add(1, date.Months)
   date.range(date.Day, 1, start, end)
 }
 
@@ -220,7 +208,7 @@ pub fn prev_month(month: Int, year: Int) -> String {
 pub fn generate_calendar_tiles(
   month: date.Month,
   year: Int,
-  sessions: List(date.Date),
+  sessions: List(common.GymSession),
 ) -> List(Element(a)) {
   let days = generate_days_in_month(month, year)
   case days {
@@ -254,8 +242,9 @@ pub fn generate_calendar_tiles(
             first
             |> view_calendar_day(
               "col-start-" <> number |> int.to_string <> " row-start-3",
-              list.find(sessions, fn(session) { session == first })
-                |> result.is_ok,
+              list.find(sessions, fn(session) { session.date == first })
+                |> result.map(fn(session) { session.emoji })
+                |> result.unwrap(""),
             )
           },
         ],
@@ -264,8 +253,9 @@ pub fn generate_calendar_tiles(
             view_calendar_day(
               day,
               "",
-              list.find(sessions, fn(session) { session == day })
-                |> result.is_ok,
+              list.find(sessions, fn(session) { session.date == day })
+                |> result.map(fn(session) { session.emoji })
+                |> result.unwrap(""),
             )
           }),
       ])

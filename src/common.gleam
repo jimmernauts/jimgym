@@ -8,13 +8,7 @@ import gleam/string
 import rada/date
 
 pub type ExerciseTemplate {
-  SetsExerciseTemplate(
-    name: String,
-    sets: Int,
-    reps: Int,
-    weight: Float,
-    rest: Int,
-  )
+  SetsExerciseTemplate(name: String, sets: Int, reps: Int, weight: Float)
   TimedExerciseTemplate(name: String, duration: Int)
 }
 
@@ -27,7 +21,7 @@ pub type SessionTemplate {
 }
 
 pub type Exercise {
-  SetsExercise(name: String, reps: Int, weight: Float, rest: Int)
+  SetsExercise(name: String, reps: Int, weight: Float)
   TimedExercise(name: String, duration: Int)
 }
 
@@ -77,7 +71,6 @@ pub fn group_records_into_exercises(
           record.name,
           option.unwrap(record.reps, 0),
           option.unwrap(record.weight, 0.0),
-          rest: 0,
         )
       Some(duration) -> TimedExercise(record.name, duration)
     }
@@ -106,4 +99,14 @@ pub fn format_time(seconds: Int) -> String {
   let minutes = seconds / 60
   let remaining_seconds = seconds % 60
   minutes |> int.to_string <> ":" <> remaining_seconds |> int.to_string
+}
+
+pub fn group_exercises_by_sets(exercises: List(Exercise)) {
+  let uniques = exercises |> list.unique
+  let counts =
+    uniques
+    |> list.map(fn(exercise) {
+      #(exercises |> list.count(fn(e) { e == exercise }), exercise)
+    })
+  counts
 }

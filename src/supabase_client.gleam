@@ -105,7 +105,7 @@ pub fn insert_session(
     |> list.flatten
     |> list.map(fn(exercise) {
       case exercise {
-        common.SetsExercise(name, reps, weight, _rest) ->
+        common.SetsExercise(name, reps, weight) ->
           pog.query(insert_records_query)
           |> pog.parameter(session.date |> date.to_iso_string |> pog.text)
           |> pog.parameter(name |> pog.text)

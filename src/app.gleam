@@ -1,3 +1,4 @@
+import cache
 import common.{
   type Exercise, ExerciseRecord, GymSession, SessionTemplate, SetsExercise,
   SetsExerciseTemplate, TimedExercise, TimedExerciseTemplate,
@@ -21,12 +22,11 @@ import lustre/element/html.{
   th, tr,
 }
 import mist
-import pages/get_session.{get_session}
+import pages/get_session.{get_session, get_session_mini}
 import pages/list_sessions.{list_sessions}
 import pages/new_session.{new_session}
 import pog
 import rada/date
-import session_actor
 import supabase_client
 import wisp.{type Request, type Response}
 import wisp/wisp_mist
@@ -35,11 +35,11 @@ import wisp/wisp_mist
 pub fn main() {
   let assert Ok(db) = supabase_client.connect_db()
 
-  let actor = session_actor.start()
+  let actor = cache.start()
   supabase_client.get_all_sessions(db)
   |> echo
   |> result.unwrap([])
-  |> session_actor.set_sessions(actor)
+  |> cache.set_sessions(actor)
 
   wisp.configure_logger()
   let secret_key_base = wisp.random_string(64)
@@ -55,31 +55,17 @@ pub fn main() {
 
 pub fn handle_request(
   req: Request,
-  actor: process.Subject(session_actor.Msg),
+  actor: process.Subject(cache.Msg),
   db: pog.Connection,
 ) -> Response {
-  let model = session_actor.get_sessions(actor)
+  let model = cache.get_sessions(actor)
   let assert Ok(priv) = wisp.priv_directory("app")
   use <- wisp.log_request(req)
   use <- wisp.serve_static(req, under: "/", from: priv <> "/static")
-  case wisp.path_segments(req) {
-    [] -> view(home(req, model))
-    ["sessions"] -> {
-      let year = date.today() |> date.year
-      let month = date.today() |> date.month_number
-
-      view(list_sessions(
-        req,
-        model
-          |> list.filter(fn(session) {
-            session.date |> date.month_number == month
-            && session.date |> date.year == year
-          }),
-        year,
-        month,
-      ))
-    }
-    ["sessions", year, month] -> {
+  case wisp.path_segments(req), wisp.get_query(req) {
+    [], _ -> view(home(req, model))
+    ["new"], _ -> new_session(req, actor, db)
+    [year, month], _ -> {
       let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
       let month =
         month |> int.parse |> result.unwrap(date.today() |> date.month_number)
@@ -95,20 +81,25 @@ pub fn handle_request(
         month,
       ))
     }
-    ["session", "new"] -> new_session(req, actor, db)
-    ["session", date] ->
-      case
-        list.find(model, fn(session) {
-          case date.from_iso_string(date) {
-            Ok(date) -> session.date == date
-            Error(_) -> False
-          }
-        })
-      {
-        Ok(session) -> view(get_session(req, session))
-        Error(_) -> wisp.not_found()
-      }
-    _ -> wisp.not_found()
+    [year, month, day], params -> {
+      let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
+      let month =
+        month |> int.parse |> result.unwrap(date.today() |> date.month_number)
+      let day = day |> int.parse |> result.unwrap(date.today() |> date.day)
+      model
+      |> list.find(fn(session) {
+        date.from_calendar_date(year, month |> date.number_to_month, day)
+        == session.date
+      })
+      |> result.map(fn(session) {
+        case params |> list.key_find("mini") {
+          Ok(_) -> view_fragment(get_session_mini(req, session))
+          Error(_) -> view(get_session(req, session))
+        }
+      })
+      |> result.unwrap(wisp.not_found())
+    }
+    _, _ -> wisp.not_found()
   }
 }
 
@@ -117,28 +108,28 @@ const session_templates = [
     "Whole Body A",
     "💪",
     [
-      SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 90),
-      SetsExerciseTemplate("Sled Push", 5, 10, 20.0, 90),
-      SetsExerciseTemplate("Bench Press", 3, 10, 20.0, 90),
-      SetsExerciseTemplate("Rows", 3, 10, 20.0, 90),
+      SetsExerciseTemplate("Sled Drag", 5, 10, 20.0),
+      SetsExerciseTemplate("Sled Push", 5, 10, 20.0),
+      SetsExerciseTemplate("Bench Press", 3, 10, 20.0),
+      SetsExerciseTemplate("Rows", 3, 10, 20.0),
     ],
   ),
   SessionTemplate(
     "Whole Body B",
     "🏋️",
     [
-      SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
-      SetsExerciseTemplate("Deadlifts", 3, 10, 20.0, 90),
-      SetsExerciseTemplate("Pull-ups", 3, 8, 14.0, 90),
-      SetsExerciseTemplate("Shoulder Press", 3, 8, 17.5, 90),
+      SetsExerciseTemplate("Sled Drag", 5, 10, 20.0),
+      SetsExerciseTemplate("Deadlifts", 3, 10, 20.0),
+      SetsExerciseTemplate("Pull-ups", 3, 8, 14.0),
+      SetsExerciseTemplate("Shoulder Press", 3, 8, 20.0),
     ],
   ),
   SessionTemplate(
     "Rehab",
-    "🏃",
+    "🧎",
     [
-      SetsExerciseTemplate("Sled Drag", 5, 10, 20.0, 60),
-      SetsExerciseTemplate("Patrick Step", 3, 20, 0.0, 60),
+      SetsExerciseTemplate("Sled Drag", 5, 10, 20.0),
+      SetsExerciseTemplate("Patrick Step", 3, 20, 0.0),
     ],
   ),
   SessionTemplate(
@@ -164,6 +155,7 @@ pub fn view(body: List(Element(a))) -> Response {
       html.title([], "Jim's Gym Tracker"),
       html.link([rel("icon"), href("/favicon.svg"), type_("image/svg+xml")]),
       html.link([rel("stylesheet"), href("/app.css")]),
+      html.script([attribute.src("/fixi.js")], ""),
     ]),
     html.body([], [
       html.main(
@@ -184,6 +176,16 @@ pub fn view(body: List(Element(a))) -> Response {
     ]),
   ])
   |> element.to_document_string_tree
+  |> wisp.html_response(200)
+}
+
+pub fn view_fragment(fragment: List(Element(a))) -> Response {
+  case fragment {
+    [a, ..rest] -> element.fragment(fragment)
+    [a] -> a
+    [] -> element.none()
+  }
+  |> element.to_string_tree
   |> wisp.html_response(200)
 }
 
@@ -225,7 +227,14 @@ pub fn home(_req: Request, model: List(common.GymSession)) -> List(Element(a)) {
                 class(
                   "font-slab font-bold flex justify-start p-3 text-3xl text-uchu-yin fill-diagonal-uchu-light-gray border-uchu-yin border-2 rounded-md col-span-6 gap-2 items-center",
                 ),
-                attribute.href("/session/current"),
+                attribute.href(
+                  "/"
+                  <> date.today() |> date.year |> int.to_string
+                  <> "/"
+                  <> date.today() |> date.month_number |> int.to_string
+                  <> "/"
+                  <> date.today() |> date.day |> int.to_string,
+                ),
               ],
               [
                 h1([class("font-bold text-3xl")], [text("⌛ ")]),
@@ -238,7 +247,12 @@ pub fn home(_req: Request, model: List(common.GymSession)) -> List(Element(a)) {
             class(
               "bg-uchu-light-gray border-2 border-uchu-yin rounded-md overflow-hidden col-span-6 p-3 cursor-pointer flex gap-2 justify-start items-center",
             ),
-            attribute.href("/sessions"),
+            attribute.href(
+              "/"
+              <> date.today() |> date.year |> int.to_string
+              <> "/"
+              <> date.today() |> date.month_number |> int.to_string,
+            ),
           ],
           [
             h1([class("font-bold text-3xl")], [text("🕵️ ")]),
@@ -305,8 +319,8 @@ fn view_session_template_card(template: common.SessionTemplate) -> Element(a) {
             template.exercises
               |> list.map(fn(exercise) {
                 case exercise {
-                  SetsExerciseTemplate(name, sets, reps, weight, rest) ->
-                    view_set_exercise_row(name, sets, reps, weight, rest)
+                  SetsExerciseTemplate(name, sets, reps, weight) ->
+                    view_set_exercise_row(name, sets, reps, weight)
                   TimedExerciseTemplate(name, duration) ->
                     view_timed_exercise_row(name, duration)
                 }
@@ -319,10 +333,7 @@ fn view_session_template_card(template: common.SessionTemplate) -> Element(a) {
               "mt-4 w-full p-2 bg-uchu-light-gray font-bold font-slab border cursor-pointer border-uchu-yin rounded-md",
             ),
             attribute.href(
-              "/session/new?template="
-              <> template.name
-              <> "&emoji="
-              <> template.emoji,
+              "/new?template=" <> template.name <> "&emoji=" <> template.emoji,
             ),
           ],
           [text("Start Session")],
@@ -339,13 +350,7 @@ fn view_timed_exercise_row(name: String, duration: Int) {
   ])
 }
 
-fn view_set_exercise_row(
-  name: String,
-  sets: Int,
-  reps: Int,
-  weight: Float,
-  rest: Int,
-) {
+fn view_set_exercise_row(name: String, sets: Int, reps: Int, weight: Float) {
   tr([class("border-b border-gray-100")], [
     td([class("py-1 text-center")], [
       text(int.to_string(sets) <> "×" <> int.to_string(reps)),
@@ -374,7 +379,6 @@ fn view_set_exercise_row(
         }
       }),
     ]),
-    td([class("py-1 text-center")], [text(int.to_string(rest) <> "s")]),
   ])
 }
 
@@ -385,7 +389,7 @@ fn flatten_session(session: common.GymSession) -> List(common.ExerciseRecord) {
   |> list.flatten
   |> list.map(fn(exercise) {
     case exercise {
-      SetsExercise(name, reps, weight, _rest) ->
+      SetsExercise(name, reps, weight) ->
         ExerciseRecord(
           date: session.date,
           name: name,
