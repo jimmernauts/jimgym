@@ -4,12 +4,15 @@ import gleam/dict
 import gleam/dynamic/decode
 import gleam/list
 import gleam/result
+import gleam/string
 import pog
 import rada/date
 
 pub type DbError {
   QueryError(pog.QueryError)
   EnvVarError
+  TransactionError(pog.TransactionError)
+  OtherError(String)
 }
 
 /// Read the DATABASE_URL environment variable.
@@ -89,12 +92,12 @@ pub fn get_all_sessions(
   }
 }
 
-pub fn insert_session(
+pub fn upsert_session(
   db: pog.Connection,
   session: common.GymSession,
-) -> Result(Nil, List(DbError)) {
+) -> Result(Nil, DbError) {
   let sessions_query =
-    pog.query(insert_sessions_query)
+    pog.query(upsert_sessions_query)
     |> pog.parameter(session.date |> to_pog_date)
     |> pog.parameter(session.session_name |> pog.text)
     |> pog.parameter(session.emoji |> pog.text)
@@ -127,6 +130,15 @@ pub fn insert_session(
     |> pog.execute(sessions_query, _)
     |> result.map_error(fn(err) { QueryError(err) })
 
+  let delete_records =
+    db
+    |> pog.execute(
+      pog.query(delete_records_query)
+        |> pog.parameter(session.date |> to_pog_date),
+      _,
+    )
+    |> result.map_error(fn(err) { QueryError(err) })
+
   let insert_records =
     records_queries
     |> list.map(fn(query) {
@@ -134,12 +146,13 @@ pub fn insert_session(
       |> pog.execute(query, _)
       |> result.map_error(fn(err) { QueryError(err) })
     })
-
-  case common.list_append_one(insert_records, insert_session) {
-    [Ok(_)] -> Ok(Nil)
-    a -> common.flatten_errors(a)
+  let all_results = fn(_conn: pog.Connection) -> Result(Nil, String) {
+    common.list_append_one(insert_records, delete_records)
+    |> common.list_append_one(insert_session)
+    |> common.flatten_errors
+    |> result.map_error(string.inspect)
   }
-  |> echo
+  pog.transaction(db, all_results) |> result.map_error(TransactionError)
 }
 
 const get_sessions_query = "SELECT
@@ -158,8 +171,14 @@ const get_exercises_query = "SELECT
   FROM
     exercise_records e"
 
-const insert_sessions_query = "INSERT INTO gym_sessions (date, session_name, emoji)
-VALUES ($1, $2, $3);"
+const upsert_sessions_query = "INSERT INTO gym_sessions (date, session_name, emoji)
+VALUES ($1, $2, $3)
+ON CONFLICT(date)
+DO UPDATE SET
+session_name = EXCLUDED.session_name
+emoji = EXCLUDED.emoji;"
+
+const delete_records_query = "DELETE FROM exercise_records WHERE date = $1;"
 
 const insert_records_query = "INSERT INTO exercise_records (date, name, reps, weight, duration)
 VALUES ($1, $2, $3, $4, $5);"

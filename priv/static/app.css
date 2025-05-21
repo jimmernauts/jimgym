@@ -298,6 +298,9 @@
   .hidden {
     display: none;
   }
+  .field-sizing-content {
+    field-sizing: content;
+  }
   .h-dvh {
     height: 100dvh;
   }
@@ -309,6 +312,9 @@
   }
   .w-\[3\.5ch\] {
     width: 3.5ch;
+  }
+  .w-\[4ch\] {
+    width: 4ch;
   }
   .w-full {
     width: 100%;
@@ -454,6 +460,9 @@
   .text-center {
     text-align: center;
   }
+  .text-right {
+    text-align: right;
+  }
   .font-hand {
     font-family: var(--font-hand);
   }
@@ -522,6 +531,9 @@
       grid-template-columns: [start] 1fr [full-start] 3fr [main-start] 90% [main-end] 3fr [full-end] 1fr [end];
     }
   }
+}
+input {
+  field-sizing: content;
 }
 @view-transition {
   navigation: auto;

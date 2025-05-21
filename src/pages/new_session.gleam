@@ -54,7 +54,7 @@ pub fn new_session(
 
   let insert_session = fn(matching_session: common.GymSession) -> Result(
     Nil,
-    List(supabase_client.DbError),
+    supabase_client.DbError,
   ) {
     let new_session =
       common.GymSession(
@@ -63,7 +63,7 @@ pub fn new_session(
         emoji: matching_session.emoji,
         exercises: matching_session.exercises,
       )
-    supabase_client.insert_session(db, new_session)
+    supabase_client.upsert_session(db, new_session)
   }
 
   let return_response = fn(result: Result(a, b)) -> Response {

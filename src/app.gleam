@@ -7,6 +7,7 @@ import gleam/bool
 import gleam/dict.{type Dict}
 import gleam/erlang/process
 import gleam/float
+import gleam/http.{Get, Post}
 import gleam/int
 import gleam/io
 import gleam/list
@@ -25,6 +26,7 @@ import mist
 import pages/get_session.{get_session, get_session_mini}
 import pages/list_sessions.{list_sessions}
 import pages/new_session.{new_session}
+import pages/update_session.{update_session}
 import pog
 import rada/date
 import supabase_client
@@ -65,26 +67,29 @@ pub fn handle_request(
   let assert Ok(priv) = wisp.priv_directory("app")
   use <- wisp.log_request(req)
   use <- wisp.serve_static(req, under: "/", from: priv <> "/static")
-  case wisp.path_segments(req), wisp.get_query(req) {
-    [], _ -> view(home(req, model))
-    ["new"], _ -> new_session(req, actor, db)
-    [year, month], _ -> {
+  case req.method, wisp.path_segments(req), wisp.get_query(req) {
+    Get, [], _ -> view(home(req, model), [])
+    Get, ["new"], _ -> new_session(req, actor, db)
+    Get, [year, month], _ -> {
       let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
       let month =
         month |> int.parse |> result.unwrap(date.today() |> date.month_number)
 
-      view(list_sessions(
-        req,
-        model
-          |> list.filter(fn(session) {
-            session.date |> date.month_number == month
-            && session.date |> date.year == year
-          }),
-        year,
-        month,
-      ))
+      view(
+        list_sessions(
+          req,
+          model
+            |> list.filter(fn(session) {
+              session.date |> date.month_number == month
+              && session.date |> date.year == year
+            }),
+          year,
+          month,
+        ),
+        [],
+      )
     }
-    [year, month, day], params -> {
+    Get, [year, month, day], params -> {
       let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
       let month =
         month |> int.parse |> result.unwrap(date.today() |> date.month_number)
@@ -97,13 +102,34 @@ pub fn handle_request(
       |> result.map(fn(session) {
         case params |> list.key_find("mini") {
           Ok(_) -> view_fragment(get_session_mini(req, session))
-          Error(_) -> view(get_session(req, session))
+          Error(_) -> view(get_session(req, session), [save_session_button()])
         }
       })
       |> result.unwrap(wisp.not_found())
     }
-    _, _ -> wisp.not_found()
+    Post, [year, month, day], _ -> {
+      let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
+      let month =
+        month
+        |> int.parse
+        |> result.unwrap(date.today() |> date.month_number)
+        |> date.number_to_month
+      let day = day |> int.parse |> result.unwrap(date.today() |> date.day)
+      update_session(req, date.from_calendar_date(year, month, day), actor, db)
+    }
+    _, _, _ -> wisp.not_found()
   }
+}
+
+fn save_session_button() -> Element(a) {
+  html.button(
+    [
+      attribute.form("session-form"),
+      attribute.formmethod("post"),
+      class("self-center"),
+    ],
+    [text("💾")],
+  )
 }
 
 const session_templates = [
@@ -147,7 +173,7 @@ const session_templates = [
 
 //----VIEWS------------------------------------------------------------
 
-pub fn view(body: List(Element(a))) -> Response {
+pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response {
   html.html([], [
     html.head([], [
       html.meta([
@@ -174,7 +200,7 @@ pub fn view(body: List(Element(a))) -> Response {
     font-hand",
           ),
         ],
-        body |> common.list_append_one(view_nav([])),
+        body |> common.list_append_one(view_nav(nav_elements)),
       ),
     ]),
   ])

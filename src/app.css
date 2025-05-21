@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+
+input {
+    field-sizing: content;
+}
+
 @view-transition {
     navigation: auto;
   }

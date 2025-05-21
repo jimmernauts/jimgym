@@ -4,9 +4,9 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/string
-import lustre/attribute.{class, id, style, type_}
+import lustre/attribute.{class, id, name, style, type_}
 import lustre/element.{type Element}
-import lustre/element/html.{div, h1, section, table, tbody, td, text, tr}
+import lustre/element/html.{div, form, h1, section, table, tbody, td, text, tr}
 import rada/date
 import wisp.{type Request, type Response}
 
@@ -15,28 +15,35 @@ pub fn get_session(req: Request, session: common.GymSession) -> List(Element(a))
     h1(
       [
         class(
-          "font-slab text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
+          "font-slab text-7xl font-bold col-[main-start_/_main-end] row-start-[header] flex flex-row gap-2",
         ),
       ],
-      [text(session.emoji <> " " <> session.date |> date.format("dd MMM yy"))],
+      [
+        html.input([
+          attribute.form("session-form"),
+          id("session-emoji"),
+          type_("text"),
+          attribute.value(session.emoji),
+        ]),
+        html.input([
+          attribute.form("session-form"),
+          id("session-name"),
+          type_("text"),
+          attribute.value(session.session_name),
+        ]),
+      ],
     ),
-    table(
+    form(
       [
         class(
-          "px-2 row-start-[content] overflow-y-scroll gap-6 grid col-[main-start_/_main-end] subgrid-cols w-full text-sm",
+          "px-2 row-start-[content] overflow-y-scroll gap-1 grid col-[main-start_/_main-end] grid-cols-6 w-full text-sm",
         ),
+        id("session-form"),
       ],
-      [
-        tbody(
-          [class("grid grid-cols-6 col-[main-start_/_main-end]")],
-          session.exercises
-            |> dict.to_list
-            |> list.map(fn(group) {
-              group.1 |> list.index_map(view_exercise_input)
-            })
-            |> list.flatten,
-        ),
-      ],
+      session.exercises
+        |> dict.to_list
+        |> list.map(fn(group) { group.1 |> list.index_map(view_exercise_input) })
+        |> list.flatten,
     ),
   ]
 }
@@ -46,73 +53,47 @@ pub fn get_session(req: Request, session: common.GymSession) -> List(Element(a))
 fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
   case exercise {
     common.SetsExercise(name, reps, weight) ->
-      tr([class("border-b border-gray-100 col-span-6 subgrid-cols gap-1")], [
-        td(
-          [
-            class(
-              "text-center col-start-1 col-span-1 items-center flex justify-center",
-            ),
-          ],
-          [
-            html.input([
-              case reps |> int.to_string |> string.length < 2 {
-                True -> style("padding-left", "1ch")
-                False -> attribute.none()
-              },
-              class("w-[2ch]"),
-              type_("number"),
-              attribute.step("1"),
-              attribute.value(reps |> int.to_string),
-            ]),
-          ],
-        ),
-        td(
-          [
-            class(
-              "text-center col-start-2 items-center col-span-2 flex justify-start",
-            ),
-          ],
-          [text(name)],
-        ),
-        td(
-          [
-            class(
-              "text-center col-start-4 items-center col-span-1 flex justify-end",
-            ),
-          ],
-          [
-            html.input([
-              class("w-[3.5ch]"),
-              type_("number"),
-              attribute.step("0.5"),
-              attribute.value(weight |> float.to_string),
-            ]),
-            text("kg"),
-          ],
-        ),
-        td(
-          [
-            class(
-              "text-center col-start-5 items-center col-span-2 flex justify-evenly",
-            ),
-          ],
-          [],
-        ),
+      div([class("border-b border-gray-100 col-span-6 subgrid-cols gap-1")], [
+        html.input([
+          class("w-[4ch] text-right col-start-1 col-span-1"),
+          type_("number"),
+          attribute.step("1"),
+          attribute.value(reps |> int.to_string),
+          attribute.name(exercise.name <> "-reps-" <> index |> int.to_string),
+        ]),
+        html.input([
+          class(
+            "col-start-2 col-span-2 text-center items-center flex justify-start",
+          ),
+          type_("text"),
+          attribute.value(name),
+          attribute.name(exercise.name <> "-name-" <> index |> int.to_string),
+        ]),
+        html.input([
+          class(
+            "w-[3.5ch] text-center col-start-4 items-center col-span-1 flex justify-end",
+          ),
+          type_("number"),
+          attribute.step("0.5"),
+          attribute.value(weight |> float.to_string),
+          attribute.name(exercise.name <> "-weight-" <> index |> int.to_string),
+        ]),
+        text(" kg"),
       ])
     common.TimedExercise(name, duration) ->
-      tr([class("border-b border-gray-100")], [
-        td([class("py-1 text-center")], [
+      html.fieldset([class("border-b border-gray-100")], [
+        div([class("py-1 text-center")], [
           html.input([
             class(""),
             type_("number"),
+            attribute.name(
+              exercise.name <> "-duration-" <> index |> int.to_string,
+            ),
             attribute.value(duration |> int.to_string),
           ]),
           text("m"),
         ]),
-        td([class("py-1")], [
-          text(name),
-          text(common.format_time(duration * 60) <> "s ⌛"),
-        ]),
+        div([class("py-1")], [text(name)]),
       ])
   }
 }

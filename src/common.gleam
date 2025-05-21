@@ -111,6 +111,14 @@ pub fn group_exercises_by_sets(exercises: List(Exercise)) {
   counts
 }
 
+// Helper function to get the name of an exercise
+pub fn exercise_name(exercise: Exercise) -> String {
+  case exercise {
+    SetsExercise(name, _, _) -> name
+    TimedExercise(name, _) -> name
+  }
+}
+
 // Helper function to create exercises from a session template
 pub fn exercises_from_template(
   template_exercises: List(ExerciseTemplate),
@@ -126,4 +134,15 @@ pub fn exercises_from_template(
   |> list.map(template_to_concrete)
   |> list.flatten
   |> list.group(fn(exercise) { exercise.name })
+}
+
+pub fn try_replacing_error(
+  result: Result(a, e),
+  apply fun: fn(a) -> Result(b, f),
+  replacing error_mapper: fn(e) -> f,
+) -> Result(b, f) {
+  case result {
+    Ok(x) -> fun(x)
+    Error(y) -> Error(error_mapper(y))
+  }
 }
