@@ -45,12 +45,6 @@ pub type GymSession {
   )
 }
 
-/// Appends an item to the end of a list
-///
-pub fn list_append_one(list: List(a), item: a) -> List(a) {
-  [[item], list] |> list.reverse |> list.flatten
-}
-
 /// Parses a string as a float, being tolerant of integer strings
 /// 
 pub fn float_parse_tolerant(string: String) -> Float {
@@ -144,5 +138,65 @@ pub fn try_replacing_error(
   case result {
     Ok(x) -> fun(x)
     Error(y) -> Error(error_mapper(y))
+  }
+}
+
+///------LIST UTILS------------------------------------------------------------
+/// Appends an item to the end of a list
+///
+pub fn list_append_one(list: List(a), item: a) -> List(a) {
+  [[item], list] |> list.reverse |> list.flatten
+}
+
+/// Return the `n`th element of a list, or `None` if the list is too short.
+pub fn list_at(list: List(a), n: Int) -> Option(a) {
+  case list {
+    [] -> None
+    [x, ..] if n == 0 -> Some(x)
+    [_x, ..xs] -> list_at(xs, n - 1)
+  }
+}
+
+pub fn list_first_and_last(of list: List(a)) -> List(a) {
+  let first = list |> list.first
+  let last = list |> list.reverse |> list.first
+  case first, last {
+    Ok(first), Ok(last) -> [first, last]
+    _, _ -> []
+  }
+}
+
+pub fn list_keep_ok(results: List(Result(a, e))) -> List(a) {
+  results
+  |> list.map(fn(result) {
+    case result {
+      Ok(x) -> [x]
+      Error(_) -> []
+    }
+  })
+  |> list.flatten
+}
+
+pub fn float_to_intstring(input: Float) -> String {
+  case input {
+    0.0 -> ""
+    input -> {
+      // Check if it's effectively an integer
+      let int_part = float.truncate(input)
+      let decimal_part = input -. int.to_float(int_part)
+
+      case decimal_part <. 0.01 || decimal_part >. 0.99 {
+        True -> int.to_string(int_part)
+        False -> {
+          // Format with 1 decimal place if it's a true float
+          let decimal_str =
+            decimal_part *. 10.0
+            |> float.round
+            |> int.to_string
+
+          int.to_string(int_part) <> "." <> decimal_str
+        }
+      }
+    }
   }
 }

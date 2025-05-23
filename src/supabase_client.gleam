@@ -1,4 +1,4 @@
-import common.{type ExerciseRecord}
+import common
 import envoy
 import gleam/dict
 import gleam/dynamic/decode
@@ -152,7 +152,9 @@ pub fn upsert_session(
     |> common.flatten_errors
     |> result.map_error(string.inspect)
   }
-  pog.transaction(db, all_results) |> result.map_error(TransactionError)
+  pog.transaction(db, all_results)
+  |> result.map_error(TransactionError)
+  |> echo
 }
 
 const get_sessions_query = "SELECT
@@ -175,7 +177,7 @@ const upsert_sessions_query = "INSERT INTO gym_sessions (date, session_name, emo
 VALUES ($1, $2, $3)
 ON CONFLICT(date)
 DO UPDATE SET
-session_name = EXCLUDED.session_name
+session_name = EXCLUDED.session_name,
 emoji = EXCLUDED.emoji;"
 
 const delete_records_query = "DELETE FROM exercise_records WHERE date = $1;"

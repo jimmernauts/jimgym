@@ -3,16 +3,14 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/result
-import lustre/attribute.{class, href, id, style, type_}
+import lustre/attribute.{class, href, id}
 import lustre/element.{type Element}
-import lustre/element/html.{
-  a, article, button, div, h1, p, section, summary, table, tbody, td, text, tr,
-}
+import lustre/element/html.{a, article, div, h1, p, section, td, text, tr}
 import rada/date
-import wisp.{type Request, type Response}
+import wisp.{type Request}
 
 pub fn list_sessions(
-  req: Request,
+  _req: Request,
   model: List(common.GymSession),
   year: Int,
   month: Int,
@@ -21,7 +19,7 @@ pub fn list_sessions(
     h1(
       [
         class(
-          "text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
+          "text-6xl font-bold col-[main-start_/_main-end] row-start-[header]",
         ),
       ],
       [text("💪🤸‍♂️🏋️")],

@@ -1,11 +1,9 @@
 import cache
 import common
-import gleam/dict
 import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/result
-import lustre/element.{type Element}
 import pog
 import rada/date
 import supabase_client

@@ -1,26 +1,18 @@
 import cache
-import common.{
-  type Exercise, ExerciseRecord, GymSession, SessionTemplate, SetsExercise,
-  SetsExerciseTemplate, TimedExercise, TimedExerciseTemplate,
-}
-import gleam/bool
-import gleam/dict.{type Dict}
+import common.{SessionTemplate, SetsExerciseTemplate, TimedExerciseTemplate}
 import gleam/erlang/process
 import gleam/float
 import gleam/http.{Get, Post}
 import gleam/int
-import gleam/io
 import gleam/list
-import gleam/option.{type Option, None, Some}
 import gleam/result
-import gleam/string
 import lustre/attribute.{
-  attribute, charset, class, content, href, id, name, rel, type_,
+  attribute, charset, class, content, href, id, name, rel, style, styles, type_,
 }
-import lustre/element.{type Element, to_document_string}
+import lustre/element.{type Element}
 import lustre/element/html.{
   a, button, details, div, h1, h3, nav, section, summary, table, tbody, td, text,
-  th, tr,
+  tr,
 }
 import mist
 import pages/get_session.{get_session, get_session_mini}
@@ -39,7 +31,6 @@ pub fn main() {
 
   let actor = cache.start()
   supabase_client.get_all_sessions(db)
-  |> echo
   |> result.unwrap([])
   |> cache.set_sessions(actor)
 
@@ -102,7 +93,11 @@ pub fn handle_request(
       |> result.map(fn(session) {
         case params |> list.key_find("mini") {
           Ok(_) -> view_fragment(get_session_mini(req, session))
-          Error(_) -> view(get_session(req, session), [save_session_button()])
+          Error(_) ->
+            view(get_session(req, session), [
+              add_input_button(),
+              save_session_button(),
+            ])
         }
       })
       |> result.unwrap(wisp.not_found())
@@ -119,17 +114,6 @@ pub fn handle_request(
     }
     _, _, _ -> wisp.not_found()
   }
-}
-
-fn save_session_button() -> Element(a) {
-  html.button(
-    [
-      attribute.form("session-form"),
-      attribute.formmethod("post"),
-      class("self-center"),
-    ],
-    [text("💾")],
-  )
 }
 
 const session_templates = [
@@ -185,6 +169,7 @@ pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response 
       html.link([rel("icon"), href("/favicon.svg"), type_("image/svg+xml")]),
       html.link([rel("stylesheet"), href("/app.css")]),
       html.script([attribute.src("/fixi.js")], ""),
+      html.script([attribute.src("/ext-fixi.js")], ""),
     ]),
     html.body([], [
       html.main(
@@ -196,7 +181,7 @@ pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response 
     lg:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_95%_[main-end]_3fr_[full-end]_1fr_[end]]
     md:grid-cols-[[start_full-start]_1fr_[main-start]_95%_[main-end]_1fr_[full-end_end]]
     grid-cols-[[start_full-start_main-start]_100%_[main-end_full-end_end]]
-    grid-rows-[[header]_1fr_[content]_8fr_[footer]_1fr]
+    grid-rows-[[header]_9%_[content]_80%_[footer]_9%]
     font-hand",
           ),
         ],
@@ -208,23 +193,13 @@ pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response 
   |> wisp.html_response(200)
 }
 
-pub fn view_fragment(fragment: List(Element(a))) -> Response {
-  case fragment {
-    [a, ..rest] -> element.fragment(fragment)
-    [a] -> a
-    [] -> element.none()
-  }
-  |> element.to_string_tree
-  |> wisp.html_response(200)
-}
-
 pub fn home(_req: Request, model: List(common.GymSession)) -> List(Element(a)) {
   let sessions = model
   [
     h1(
       [
         class(
-          "text-7xl font-bold col-[main-start_/_main-end] row-start-[header]",
+          "text-6xl font-bold col-[main-start_/_main-end] row-start-[header]",
         ),
       ],
       [text("💪🤸‍♂️🏋️")],
@@ -310,6 +285,70 @@ pub fn home(_req: Request, model: List(common.GymSession)) -> List(Element(a)) {
 
 //--VIEW HELPERS------------------------------------------------------------------
 
+fn save_session_button() -> Element(a) {
+  html.button(
+    [
+      attribute.form("session-form"),
+      attribute.formmethod("post"),
+      class("self-center"),
+    ],
+    [text("💾")],
+  )
+}
+
+fn add_input_button() -> Element(a) {
+  element.fragment([
+    html.button(
+      [
+        class("self-center"),
+        attribute.popovertarget("add-input-picker"),
+        style("anchor-name", "--add-input-picker"),
+      ],
+      [text("➕")],
+    ),
+    html.aside(
+      [
+        id("add-input-picker"),
+        attribute.popover("auto"),
+        class("rounded border-1 border-uchu-yin bg-white p-2 absolute"),
+        styles([
+          #("inset", "auto"),
+          #("position-anchor", "--add-input-picker"),
+          #("position-area", "top"),
+        ]),
+      ],
+      [
+        html.button(
+          [
+            attribute("fx-action", "/new-sets-exercise-input"),
+            attribute("fx-target", "#session-form"),
+            attribute("fx-swap", "beforeend"),
+          ],
+          [text("🔢")],
+        ),
+        html.button(
+          [
+            attribute("fx-action", "/new-timed-exercise-input"),
+            attribute("fx-target", "#session-form"),
+            attribute("fx-swap", "beforeend"),
+          ],
+          [text("⏱️")],
+        ),
+      ],
+    ),
+  ])
+}
+
+pub fn view_fragment(fragment: List(Element(a))) -> Response {
+  case list.length(fragment) {
+    0 -> element.none()
+    1 -> fragment |> list.first |> result.unwrap(element.none())
+    _ -> element.fragment(fragment)
+  }
+  |> element.to_string_tree
+  |> wisp.html_response(200)
+}
+
 fn view_nav(children: List(Element(a))) -> Element(a) {
   nav(
     [
@@ -332,7 +371,7 @@ fn view_session_template_card(template: common.SessionTemplate) -> Element(a) {
       summary(
         [
           class(
-            "p-3 bg-uchu-light-gray cursor-pointer flex justify-between items-center",
+            "pt-2 pb-1 px-2 bg-uchu-light-gray cursor-pointer flex justify-between items-center",
           ),
         ],
         [
@@ -359,7 +398,7 @@ fn view_session_template_card(template: common.SessionTemplate) -> Element(a) {
         a(
           [
             class(
-              "mt-4 w-full p-2 bg-uchu-light-gray font-bold font-slab border cursor-pointer border-uchu-yin rounded-md",
+              "mt-4 block p-2 text-center bg-uchu-light-gray font-bold font-slab border-2 cursor-pointer border-uchu-yin rounded-md",
             ),
             attribute.href("/new?template=" <> template.name),
           ],
@@ -407,31 +446,4 @@ fn view_set_exercise_row(name: String, sets: Int, reps: Int, weight: Float) {
       }),
     ]),
   ])
-}
-
-//-----DB --------------------------------------------------------------------------
-
-fn flatten_session(session: common.GymSession) -> List(common.ExerciseRecord) {
-  dict.values(session.exercises)
-  |> list.flatten
-  |> list.map(fn(exercise) {
-    case exercise {
-      SetsExercise(name, reps, weight) ->
-        ExerciseRecord(
-          date: session.date,
-          name: name,
-          reps: Some(reps),
-          weight: Some(weight),
-          duration: None,
-        )
-      TimedExercise(name, duration) ->
-        ExerciseRecord(
-          date: session.date,
-          name: name,
-          reps: None,
-          weight: None,
-          duration: Some(duration),
-        )
-    }
-  })
 }

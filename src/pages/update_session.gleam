@@ -1,11 +1,13 @@
 import cache
 import common
+import gleam/bool.{negate}
 import gleam/dict
 import gleam/erlang/process
 import gleam/int
 import gleam/list
+import gleam/option
 import gleam/result
-import lustre/element.{type Element}
+import gleam/string
 import pog
 import rada/date
 import supabase_client
@@ -26,24 +28,16 @@ pub fn update_session(
   // refresh the cache
 
   // redirect to the get session page for this session
-  echo "new session req"
   let return_response = fn(result: Result(a, b)) -> Response {
     cache.refresh_sessions(actor, db)
     case result {
-      Ok(_) ->
-        wisp.redirect(
-          date.today() |> date.year |> int.to_string
-          <> "/"
-          <> date.today() |> date.month_number |> int.to_string
-          <> "/"
-          <> date.today() |> date.day |> int.to_string,
-        )
+      Ok(_) -> wisp.redirect("/")
       Error(_) -> wisp.internal_server_error()
     }
   }
   use fd <- wisp.require_form(req)
   {
-    parse_formdata_to_session(fd)
+    parse_formdata_to_session(date, fd)
     |> common.try_replacing_error(
       fn(session) { supabase_client.upsert_session(db, session) },
       fn(err) { supabase_client.OtherError(err) },
@@ -53,8 +47,83 @@ pub fn update_session(
 }
 
 pub fn parse_formdata_to_session(
+  date: date.Date,
   fd: wisp.FormData,
 ) -> Result(common.GymSession, String) {
-  echo fd
-  Error("not implemented")
+  let exercise_form_data =
+    fd.values
+    |> list.filter(fn(kv) {
+      kv.0
+      |> string.contains("session_name")
+      |> negate
+    })
+  let session_name =
+    fd.values
+    |> list.find(fn(kv) { kv.0 == "session_name" })
+  let emoji =
+    fd.values
+    |> list.find(fn(kv) { kv.0 == "session_emoji" })
+  let exercises = parse_exercises(exercise_form_data)
+  case session_name, emoji {
+    Ok(session_name), Ok(emoji) ->
+      Ok(common.GymSession(
+        date: date,
+        emoji: emoji.1,
+        exercises: exercises,
+        session_name: session_name.1,
+      ))
+    _, _ -> Error("Missing session name or emoji")
+  }
 }
+
+fn parse_exercises(
+  values_list: List(#(String, String)),
+) -> dict.Dict(String, List(common.Exercise)) {
+  values_list
+  |> list.group(fn(kv) {
+    kv.0 |> string.split("|") |> common.list_first_and_last
+  })
+  |> echo
+  |> dict.map_values(fn(_k, v) {
+    v
+    |> list.map(fn(kv) {
+      #(
+        kv.0 |> string.split("|") |> common.list_at(1) |> option.unwrap(""),
+        kv.1,
+      )
+    })
+  })
+  |> echo
+  |> dict.map_values(fn(_k, v) {
+    v
+    |> exercise_from_kv_list
+  })
+  |> echo
+  |> dict.values
+  |> echo
+  |> common.list_keep_ok
+  |> echo
+  |> list.group(fn(ex) { ex.name })
+}
+
+fn exercise_from_kv_list(
+  kv_list: List(#(String, String)),
+) -> Result(common.Exercise, Nil) {
+  let name = kv_list |> list.find(fn(kv) { kv.0 == "name" })
+  let duration = kv_list |> list.find(fn(kv) { kv.0 == "duration" })
+  let reps = kv_list |> list.find(fn(kv) { kv.0 == "reps" })
+  let weight = kv_list |> list.find(fn(kv) { kv.0 == "weight" })
+  case name, duration, reps, weight {
+    Ok(name), _, Ok(reps), Ok(weight) ->
+      Ok(common.SetsExercise(
+        name.1,
+        int.parse(reps.1) |> result.unwrap(0),
+        common.float_parse_tolerant(weight.1),
+      ))
+    Ok(name), Ok(duration), _, _ ->
+      Ok(common.TimedExercise(name.1, int.parse(duration.1) |> result.unwrap(0)))
+    _, _, _, _ -> Error(Nil)
+  }
+}
+
+

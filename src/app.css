@@ -120,6 +120,17 @@ input {
     display: grid;
     grid-template-columns: subgrid
 }
+
+@utility flex-col {
+    flex-direction: column;
+    display: flex;
+}
+
+@utility flex-row {
+    flex-direction: row;
+    display: flex;
+}
+
 @utility subgrid-rows {
     display: grid;
     grid-template-rows: subgrid

@@ -1,5 +1,5 @@
 import common.{type GymSession}
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process
 import gleam/otp/actor
 import gleam/result
 import pog
