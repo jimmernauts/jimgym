@@ -84,6 +84,7 @@ fn parse_exercises(
     kv.0 |> string.split("|") |> common.list_first_and_last
   })
   |> echo
+  //TODO: Errors here !!!
   |> dict.map_values(fn(_k, v) {
     v
     |> list.map(fn(kv) {
