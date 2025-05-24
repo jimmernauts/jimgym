@@ -59,83 +59,6 @@ pub fn get_session(
 
 //---VIEW HELPERS--------------------------------------------------
 
-fn exercise_input_template() -> Element(a) {
-  element.fragment([
-    html.template([id("/new-sets-exercise-input")], [
-      div(
-        [
-          class(
-            "border-b border-gray-100 col-span-6 subgrid-cols gap-1 items-baseline",
-          ),
-        ],
-        [
-          html.input([
-            class("w-[4ch] text-right col-start-1 col-span-1"),
-            type_("number"),
-            attribute.step("1"),
-            attribute.name("new_exercise|reps"),
-          ]),
-          html.input([
-            class("col-start-2 col-span-2 text-left flex justify-start"),
-            type_("text"),
-            attribute.name("new_exercise|name"),
-          ]),
-          html.input([
-            class(
-              "w-[3.5ch] col-start-4 text-left col-span-1 flex justify-start  ",
-            ),
-            type_("number"),
-            attribute.step("0.5"),
-            attribute.name("new_exercise|weight"),
-          ]),
-          text(" kg"),
-          html.button(
-            [
-              class("col-start-6"),
-              attribute("fx-action", "delete"),
-              attribute("fx-swap", "outerHTML"),
-            ],
-            [text("❌")],
-          ),
-        ],
-      ),
-    ]),
-    html.template([id("/new-timed-exercise-input")], [
-      div(
-        [
-          class(
-            "border-b border-gray-100 col-span-6 subgrid-cols gap-1 items-baseline",
-          ),
-        ],
-        [
-          html.input([
-            class("col-start-2 col-span-2 text-left flex justify-start"),
-            type_("text"),
-            attribute.name("new_exercise|name"),
-          ]),
-          html.input([
-            class(
-              "w-[3.5ch] col-start-4 text-left col-span-1 flex justify-start  ",
-            ),
-            type_("number"),
-            attribute.step("1"),
-            attribute.name("new_exercise|duration"),
-          ]),
-          text("m"),
-          html.button(
-            [
-              class("col-start-6"),
-              attribute("fx-action", "delete"),
-              attribute("fx-swap", "outerHTML"),
-            ],
-            [text("❌")],
-          ),
-        ],
-      ),
-    ]),
-  ])
-}
-
 fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
   case exercise {
     common.SetsExercise(name, reps, weight) ->
@@ -194,7 +117,12 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
           ]),
           text("m"),
         ]),
-        div([class("py-1")], [text(name)]),
+        html.input([
+          class("col-start-2 col-span-2 text-left flex justify-start"),
+          type_("text"),
+          attribute.value(name),
+          attribute.name(exercise.name <> "|name|" <> index |> int.to_string),
+        ]),
         html.button(
           [
             class("col-start-6"),
@@ -205,6 +133,83 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
         ),
       ])
   }
+}
+
+fn exercise_input_template() -> Element(a) {
+  element.fragment([
+    html.template([id("/new-sets-exercise-input")], [
+      div(
+        [
+          class(
+            "border-b border-gray-100 col-span-6 subgrid-cols gap-1 items-baseline",
+          ),
+        ],
+        [
+          html.input([
+            class("w-[4ch] text-right col-start-1 col-span-1"),
+            type_("number"),
+            attribute.step("1"),
+            attribute.name("new_exercise|reps|NN"),
+          ]),
+          html.input([
+            class("col-start-2 col-span-2 text-left flex justify-start"),
+            type_("text"),
+            attribute.name("new_exercise|name|NN"),
+          ]),
+          html.input([
+            class(
+              "w-[3.5ch] col-start-4 text-left col-span-1 flex justify-start  ",
+            ),
+            type_("number"),
+            attribute.step("0.5"),
+            attribute.name("new_exercise|weight|NN"),
+          ]),
+          text(" kg"),
+          html.button(
+            [
+              class("col-start-6"),
+              attribute("fx-action", "delete"),
+              attribute("fx-swap", "outerHTML"),
+            ],
+            [text("❌")],
+          ),
+        ],
+      ),
+    ]),
+    html.template([id("/new-timed-exercise-input")], [
+      div(
+        [
+          class(
+            "border-b border-gray-100 col-span-6 subgrid-cols gap-1 items-baseline",
+          ),
+        ],
+        [
+          html.input([
+            class("col-start-2 col-span-2 text-left flex justify-start"),
+            type_("text"),
+            attribute.name("new_exercise|name|NN"),
+          ]),
+          html.input([
+            class(
+              "w-[3.5ch] col-start-4 text-left col-span-1 flex justify-start  ",
+            ),
+            type_("number"),
+            attribute.step("1"),
+            attribute.name("new_exercise|duration|NN"),
+          ]),
+          text("m"),
+          html.button(
+            [
+              class("col-start-6"),
+              attribute("fx-action", "delete"),
+              attribute("fx-swap", "outerHTML"),
+            ],
+            [text("❌")],
+          ),
+        ],
+      ),
+    ]),
+  ])
 }
 
 pub fn get_session_mini(

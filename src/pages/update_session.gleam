@@ -53,9 +53,14 @@ pub fn parse_formdata_to_session(
   let exercise_form_data =
     fd.values
     |> list.filter(fn(kv) {
-      kv.0
-      |> string.contains("session_name")
-      |> negate
+      let a =
+        kv.0
+        |> string.contains("session_name")
+
+      let b =
+        kv.0
+        |> string.contains("session_emoji")
+      bool.nor(a, b)
     })
   let session_name =
     fd.values
@@ -84,7 +89,6 @@ fn parse_exercises(
     kv.0 |> string.split("|") |> common.list_first_and_last
   })
   |> echo
-  //TODO: Errors here !!!
   |> dict.map_values(fn(_k, v) {
     v
     |> list.map(fn(kv) {
@@ -94,16 +98,12 @@ fn parse_exercises(
       )
     })
   })
-  |> echo
   |> dict.map_values(fn(_k, v) {
     v
     |> exercise_from_kv_list
   })
-  |> echo
   |> dict.values
-  |> echo
   |> common.list_keep_ok
-  |> echo
   |> list.group(fn(ex) { ex.name })
 }
 
@@ -126,5 +126,3 @@ fn exercise_from_kv_list(
     _, _, _, _ -> Error(Nil)
   }
 }
-
-
