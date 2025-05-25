@@ -6,14 +6,3 @@ pub fn main() {
   // Here we're using the default config, but you can customize this, as needed.
   startest.run(startest.default_config())
 }
-
-pub fn my_project_tests() {
-  describe("JimGym Tests", [
-    describe("2 + 2", [
-      it("equals 4", fn() {
-        2 + 2
-        |> expect.to_equal(4)
-      }),
-    ]),
-  ])
-}
