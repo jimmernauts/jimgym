@@ -1,12 +1,19 @@
-import gleeunit
-import gleeunit/should
+import startest.{describe, it}
+import startest/expect
 
 pub fn main() {
-  gleeunit.main()
+  // Call `startest.run` inside of your `main` function.
+  // Here we're using the default config, but you can customize this, as needed.
+  startest.run(startest.default_config())
 }
 
-// gleeunit test functions end in `_test`
-pub fn hello_world_test() {
-  1
-  |> should.equal(1)
+pub fn my_project_tests() {
+  describe("JimGym Tests", [
+    describe("2 + 2", [
+      it("equals 4", fn() {
+        2 + 2
+        |> expect.to_equal(4)
+      }),
+    ]),
+  ])
 }

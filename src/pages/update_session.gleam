@@ -1,6 +1,6 @@
 import cache
 import common
-import gleam/bool.{negate}
+import gleam/bool
 import gleam/dict
 import gleam/erlang/process
 import gleam/int
