@@ -4,6 +4,7 @@ COPY . /app/
 RUN cd /app && gleam export erlang-shipment
 
 FROM erlang:27.1.1.0-alpine
+RUN apk add e2fsprogs
 RUN \
     addgroup --system webapp && \
     adduser --system webapp -g webapp

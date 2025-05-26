@@ -15,6 +15,7 @@ import lustre/element/html.{
   tr,
 }
 import mist
+import pages/admin.{admin}
 import pages/get_session.{get_session, get_session_mini}
 import pages/list_sessions.{list_sessions}
 import pages/new_session.{new_session}
@@ -113,6 +114,7 @@ pub fn handle_request(
       let day = day |> int.parse |> result.unwrap(date.today() |> date.day)
       update_session(req, date.from_calendar_date(year, month, day), actor, db)
     }
+    Get, ["admin"], _ -> view(admin(req), [])
     _, _, _ -> wisp.not_found()
   }
 }
@@ -122,18 +124,18 @@ const session_templates = [
     "Whole Body A",
     "💪",
     [
-      SetsExerciseTemplate("Sled Drag", 5, 10, 20.0),
-      SetsExerciseTemplate("Sled Push", 5, 10, 20.0),
-      SetsExerciseTemplate("Bench Press", 3, 10, 20.0),
-      SetsExerciseTemplate("Rows", 3, 10, 20.0),
+      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
+      SetsExerciseTemplate("Sled Push", 1, 3, 20.0),
+      SetsExerciseTemplate("Bench Press", 3, 10, 35.0),
+      SetsExerciseTemplate("Rows", 3, 10, 25.0),
     ],
   ),
   SessionTemplate(
     "Whole Body B",
     "🏋️",
     [
-      SetsExerciseTemplate("Sled Drag", 5, 10, 20.0),
-      SetsExerciseTemplate("Deadlifts", 3, 10, 20.0),
+      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
+      SetsExerciseTemplate("ATG Squat", 3, 10, 0.0),
       SetsExerciseTemplate("Pull-ups", 3, 8, 14.0),
       SetsExerciseTemplate("Shoulder Press", 3, 8, 20.0),
     ],
@@ -142,7 +144,7 @@ const session_templates = [
     "Rehab",
     "🧎",
     [
-      SetsExerciseTemplate("Sled Drag", 5, 10, 20.0),
+      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
       SetsExerciseTemplate("Patrick Step", 3, 20, 0.0),
     ],
   ),

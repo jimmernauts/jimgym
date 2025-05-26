@@ -20,7 +20,6 @@ pub type DbError {
 /// Finally, connect to database.
 pub fn connect_db() -> Result(pog.Connection, DbError) {
   envoy.get("DATABASE_URL")
-  |> echo
   |> result.try(pog.url_config)
   |> echo
   |> result.map_error(fn(_) { EnvVarError })
