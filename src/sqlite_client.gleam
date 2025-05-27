@@ -1,4 +1,5 @@
 import common
+import envoy
 import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
@@ -11,14 +12,17 @@ import sqlight
 pub type DbError {
   QueryError(sqlight.Error)
   EnvVarError
-  TransactionError(sqlight.Error)
   OtherError(String)
 }
 
-const sqlite_path = "file:./data/jimgym.db?mode=rwc"
+pub fn get_sqlite_path() -> Result(String, DbError) {
+  envoy.get("SQLITE_DB")
+  |> echo
+  |> result.map_error(fn(_) { EnvVarError })
+}
 
 pub fn get_all_sessions() -> Result(List(common.GymSession), List(DbError)) {
-  use conn <- sqlight.with_connection(sqlite_path)
+  use conn <- sqlight.with_connection(get_sqlite_path() |> result.unwrap(""))
   {
     let exercise_record_decoder = {
       use date <- decode.field(0, string_date_decoder())
@@ -76,7 +80,7 @@ pub fn get_all_sessions() -> Result(List(common.GymSession), List(DbError)) {
 }
 
 pub fn upsert_session(session: common.GymSession) -> Result(Nil, List(DbError)) {
-  use conn <- sqlight.with_connection(sqlite_path)
+  use conn <- sqlight.with_connection(get_sqlite_path() |> result.unwrap(""))
   {
     let insert_session =
       sqlight.query(
@@ -87,7 +91,7 @@ pub fn upsert_session(session: common.GymSession) -> Result(Nil, List(DbError)) 
           session.session_name |> sqlight.text,
           session.emoji |> sqlight.text,
         ],
-        decode.Decoder(Nil),
+        nil_to_empty_list_decoder(),
       )
       |> result.map_error(fn(err) { QueryError(err) })
 
@@ -96,7 +100,7 @@ pub fn upsert_session(session: common.GymSession) -> Result(Nil, List(DbError)) 
         delete_records_query,
         conn,
         [session.date |> date.to_iso_string |> sqlight.text],
-        decode.Decoder(Nil),
+        nil_to_empty_list_decoder(),
       )
       |> result.map_error(fn(err) { QueryError(err) })
 
@@ -117,7 +121,7 @@ pub fn upsert_session(session: common.GymSession) -> Result(Nil, List(DbError)) 
                 weight |> sqlight.float,
                 sqlight.null(),
               ],
-              decode.Decoder(Nil),
+              nil_to_empty_list_decoder(),
             )
             |> result.map_error(fn(err) { QueryError(err) })
           common.TimedExercise(name, duration) ->
@@ -131,7 +135,7 @@ pub fn upsert_session(session: common.GymSession) -> Result(Nil, List(DbError)) 
                 sqlight.null(),
                 duration |> sqlight.int,
               ],
-              decode.Decoder(Nil),
+              nil_to_empty_list_decoder(),
             )
             |> result.map_error(fn(err) { QueryError(err) })
         }
@@ -186,4 +190,8 @@ pub fn string_date_decoder() -> decode.Decoder(date.Date) {
         decode.failure(date.from_calendar_date(01, date.Jan, 1970), str)
     }
   })
+}
+
+pub fn nil_to_empty_list_decoder() -> decode.Decoder(List(a)) {
+  decode.success([])
 }

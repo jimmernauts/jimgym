@@ -10,6 +10,7 @@ import gleam/result
 import gleam/string
 import pog
 import rada/date
+import sqlite_client
 import supabase_client
 import wisp.{type Request, type Response}
 
@@ -39,9 +40,13 @@ pub fn update_session(
   {
     parse_formdata_to_session(date, fd)
     |> common.try_replacing_error(
-      fn(session) { supabase_client.upsert_session(db, session) },
-      fn(err) { supabase_client.OtherError(err) },
+      fn(session) { sqlite_client.upsert_session(session) },
+      fn(err) {
+        echo err
+        [sqlite_client.OtherError(err)]
+      },
     )
+    |> echo
     |> return_response
   }
 }
