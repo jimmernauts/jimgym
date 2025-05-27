@@ -1,7 +1,5 @@
-import common.{
-  type Exercise, type GymSession, GymSession, SetsExercise, TimedExercise,
-}
-import gleam/dict.{type Dict}
+import common.{type GymSession, GymSession, SetsExercise, TimedExercise}
+import gleam/dict
 import gleam/float
 import gleam/int
 import gleam/list
@@ -12,7 +10,7 @@ import pages/update_session.{parse_formdata_to_session}
 import rada/date
 import startest.{describe, it}
 import startest/expect
-import wisp.{type FormData, FormData}
+import wisp.{FormData}
 
 // Helper to create a consistent date for tests
 fn test_date() -> date.Date {

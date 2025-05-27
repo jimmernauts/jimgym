@@ -1,5 +1,4 @@
-import startest.{describe, it}
-import startest/expect
+import startest
 
 pub fn main() {
   // Call `startest.run` inside of your `main` function.

@@ -2,8 +2,7 @@ import common.{type GymSession}
 import gleam/erlang/process
 import gleam/otp/actor
 import gleam/result
-import pog
-import supabase_client
+import sqlite_client
 
 // The state of our actor is a list of gym sessions and templates
 pub type State {
@@ -64,11 +63,8 @@ pub fn get_sessions(actor_subject: process.Subject(Msg)) -> List(GymSession) {
   // Return an empty list in case of error or timeout
 }
 
-pub fn refresh_sessions(
-  actor_subject: process.Subject(Msg),
-  db: pog.Connection,
-) -> Nil {
-  supabase_client.get_all_sessions(db)
+pub fn refresh_sessions(actor_subject: process.Subject(Msg)) -> Nil {
+  sqlite_client.get_all_sessions()
   |> result.unwrap([])
   |> set_sessions(actor_subject)
 }

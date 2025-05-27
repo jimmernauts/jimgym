@@ -4,16 +4,11 @@ import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/result
-import pog
 import rada/date
-import supabase_client
+import sqlite_client
 import wisp.{type Request, type Response}
 
-pub fn new_session(
-  req: Request,
-  actor: process.Subject(cache.Msg),
-  db: pog.Connection,
-) -> Response {
+pub fn new_session(req: Request, actor: process.Subject(cache.Msg)) -> Response {
   echo "new session req"
   let template_name =
     wisp.get_query(req)
@@ -52,7 +47,7 @@ pub fn new_session(
 
   let insert_session = fn(matching_session: common.GymSession) -> Result(
     Nil,
-    supabase_client.DbError,
+    List(sqlite_client.DbError),
   ) {
     let new_session =
       common.GymSession(
@@ -61,11 +56,11 @@ pub fn new_session(
         emoji: matching_session.emoji,
         exercises: matching_session.exercises,
       )
-    supabase_client.upsert_session(db, new_session)
+    sqlite_client.upsert_session(new_session)
   }
 
   let return_response = fn(result: Result(a, b)) -> Response {
-    cache.refresh_sessions(actor, db)
+    cache.refresh_sessions(actor)
     case result {
       Ok(_) ->
         wisp.redirect(

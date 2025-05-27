@@ -8,17 +8,14 @@ import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string
-import pog
 import rada/date
 import sqlite_client
-import supabase_client
 import wisp.{type Request, type Response}
 
 pub fn update_session(
   req: Request,
   date: date.Date,
   actor: process.Subject(cache.Msg),
-  db: pog.Connection,
 ) -> Response {
   // pretty similar to new_session
 
@@ -30,7 +27,7 @@ pub fn update_session(
 
   // redirect to the get session page for this session
   let return_response = fn(result: Result(a, b)) -> Response {
-    cache.refresh_sessions(actor, db)
+    cache.refresh_sessions(actor)
     case result {
       Ok(_) -> wisp.redirect("/")
       Error(_) -> wisp.internal_server_error()

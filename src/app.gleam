@@ -15,23 +15,19 @@ import lustre/element/html.{
   tr,
 }
 import mist
-import pages/admin.{admin}
 import pages/get_session.{get_session, get_session_mini}
 import pages/list_sessions.{list_sessions}
 import pages/new_session.{new_session}
 import pages/update_session.{update_session}
-import pog
 import rada/date
-import supabase_client
+import sqlite_client
 import wisp.{type Request, type Response}
 import wisp/wisp_mist
 
 // -- MAIN --
 pub fn main() {
-  let assert Ok(db) = supabase_client.connect_db()
-
   let actor = cache.start()
-  supabase_client.get_all_sessions(db)
+  sqlite_client.get_all_sessions()
   |> result.unwrap([])
   |> cache.set_sessions(actor)
 
@@ -42,7 +38,7 @@ pub fn main() {
   let secret_key_base = wisp.random_string(64)
 
   let assert Ok(_) =
-    wisp_mist.handler(handle_request(_, actor, db), secret_key_base)
+    wisp_mist.handler(handle_request(_, actor), secret_key_base)
     |> mist.new
     |> mist.bind("0.0.0.0")
     |> mist.port(8000)
@@ -54,7 +50,6 @@ pub fn main() {
 pub fn handle_request(
   req: Request,
   actor: process.Subject(cache.Msg),
-  db: pog.Connection,
 ) -> Response {
   let model = cache.get_sessions(actor)
   let assert Ok(priv) = wisp.priv_directory("app")
@@ -62,7 +57,7 @@ pub fn handle_request(
   use <- wisp.serve_static(req, under: "/", from: priv <> "/static")
   case req.method, wisp.path_segments(req), wisp.get_query(req) {
     Get, [], _ -> view(home(req, model), [])
-    Get, ["new"], _ -> new_session(req, actor, db)
+    Get, ["new"], _ -> new_session(req, actor)
     Get, [year, month], _ -> {
       let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
       let month =
@@ -112,9 +107,8 @@ pub fn handle_request(
         |> result.unwrap(date.today() |> date.month_number)
         |> date.number_to_month
       let day = day |> int.parse |> result.unwrap(date.today() |> date.day)
-      update_session(req, date.from_calendar_date(year, month, day), actor, db)
+      update_session(req, date.from_calendar_date(year, month, day), actor)
     }
-    Get, ["admin"], _ -> view(admin(req), [])
     _, _, _ -> wisp.not_found()
   }
 }
