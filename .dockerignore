@@ -7,3 +7,4 @@ build
 **/bun.lock
 **/dist
 fly.toml
+**/data

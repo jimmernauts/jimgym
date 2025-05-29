@@ -52,7 +52,7 @@ pub fn handle_request(
   actor: process.Subject(cache.Msg),
 ) -> Response {
   let model = cache.get_sessions(actor)
-  let assert Ok(priv) = wisp.priv_directory("app")
+  let assert Ok(priv) = wisp.priv_directory("jimgym")
   use <- wisp.log_request(req)
   use <- wisp.serve_static(req, under: "/", from: priv <> "/static")
   case req.method, wisp.path_segments(req), wisp.get_query(req) {
@@ -164,7 +164,7 @@ pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response 
       ]),
       html.title([], "Jim's Gym Tracker"),
       html.link([rel("icon"), href("/favicon.svg"), type_("image/svg+xml")]),
-      html.link([rel("stylesheet"), href("/app.css")]),
+      html.link([rel("stylesheet"), href("/jimgym.css")]),
       html.script([attribute.src("/fixi.js")], ""),
       html.script([attribute.src("/ext-fixi.js")], ""),
     ]),
