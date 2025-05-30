@@ -1,8 +1,6 @@
-import cache
 import common
 import gleam/bool
 import gleam/dict
-import gleam/erlang/process
 import gleam/int
 import gleam/list
 import gleam/option
@@ -12,11 +10,7 @@ import rada/date
 import sqlite_client
 import wisp.{type Request, type Response}
 
-pub fn update_session(
-  req: Request,
-  date: date.Date,
-  actor: process.Subject(cache.Msg),
-) -> Response {
+pub fn update_session(req: Request, date: date.Date) -> Response {
   // pretty similar to new_session
 
   // get form data from req object
@@ -27,7 +21,6 @@ pub fn update_session(
 
   // redirect to the get session page for this session
   let return_response = fn(result: Result(a, b)) -> Response {
-    cache.refresh_sessions(actor)
     case result {
       Ok(_) -> wisp.redirect("/")
       Error(_) -> wisp.internal_server_error()

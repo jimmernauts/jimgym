@@ -1,9 +1,9 @@
 import common
-import envoy
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/list
 import gleam/result
+import gleam/string
 import rada/date
 import sqlight
 import wisp
@@ -23,61 +23,67 @@ pub fn get_sqlite_path() -> Result(String, DbError) {
 }
 
 pub fn get_all_sessions() -> Result(List(common.GymSession), List(DbError)) {
-  use conn <- sqlight.with_connection(get_sqlite_path() |> result.unwrap(""))
-  {
-    let exercise_record_decoder = {
-      use date <- decode.field(0, string_date_decoder())
-      use name <- decode.field(1, decode.string)
-      use reps <- decode.field(2, decode.optional(decode.int))
-      use weight <- decode.field(3, decode.optional(decode.float))
-      use duration <- decode.field(4, decode.optional(decode.int))
-      decode.success(common.ExerciseRecord(
-        date: date,
-        name: name,
-        reps: reps,
-        weight: weight,
-        duration: duration,
-      ))
-    }
+  //use conn <- sqlight.with_connection(get_sqlite_path() |> result.unwrap(""))
+  echo "starting get_all_sessions"
+  let open = sqlight.open(get_sqlite_path() |> result.unwrap(""))
+  case open {
+    Ok(conn) -> {
+      let exercise_record_decoder = {
+        use date <- decode.field(0, string_date_decoder())
+        use name <- decode.field(1, decode.string)
+        use reps <- decode.field(2, decode.optional(decode.int))
+        use weight <- decode.field(3, decode.optional(decode.float))
+        use duration <- decode.field(4, decode.optional(decode.int))
+        decode.success(common.ExerciseRecord(
+          date: date,
+          name: name,
+          reps: reps,
+          weight: weight,
+          duration: duration,
+        ))
+      }
 
-    let gym_session_decoder = {
-      use date <- decode.field(0, string_date_decoder())
-      use session_name <- decode.field(1, decode.string)
-      use emoji <- decode.field(2, decode.string)
-      decode.success(common.GymSession(
-        date: date,
-        session_name: session_name,
-        emoji: emoji,
-        exercises: dict.new(),
-      ))
-    }
-    let sessions =
-      sqlight.query(get_sessions_query, conn, [], gym_session_decoder)
-      |> result.map_error(fn(err) { QueryError(err) })
+      let gym_session_decoder = {
+        use date <- decode.field(0, string_date_decoder())
+        use session_name <- decode.field(1, decode.string)
+        use emoji <- decode.field(2, decode.string)
+        decode.success(common.GymSession(
+          date: date,
+          session_name: session_name,
+          emoji: emoji,
+          exercises: dict.new(),
+        ))
+      }
+      let sessions =
+        sqlight.query(get_sessions_query, conn, [], gym_session_decoder)
+        |> result.map_error(fn(err) { QueryError(err) })
 
-    let exercise_records =
-      sqlight.query(get_exercises_query, conn, [], exercise_record_decoder)
-      |> result.map_error(fn(err) { QueryError(err) })
+      let exercise_records =
+        sqlight.query(get_exercises_query, conn, [], exercise_record_decoder)
+        |> result.map_error(fn(err) { QueryError(err) })
 
-    case sessions, exercise_records {
-      Ok(sessions), Ok(exercise_records) ->
-        sessions
-        |> list.map(fn(session) {
-          let exercises =
-            list.filter(exercise_records, fn(exercise) {
-              exercise.date == session.date
-            })
-          common.GymSession(
-            ..session,
-            exercises: exercises |> common.group_records_into_exercises,
-          )
-        })
-        |> Ok
-      Error(a), Ok(_) -> Error([a])
-      Ok(_), Error(b) -> Error([b])
-      Error(a), Error(b) -> Error([a, b])
+      case sessions, exercise_records {
+        Ok(sessions), Ok(exercise_records) ->
+          sessions
+          |> list.map(fn(session) {
+            let exercises =
+              list.filter(exercise_records, fn(exercise) {
+                exercise.date == session.date
+              })
+            common.GymSession(
+              ..session,
+              exercises: exercises |> common.group_records_into_exercises,
+            )
+          })
+          |> Ok
+        Error(a), Ok(_) -> Error([a])
+        Ok(_), Error(b) -> Error([b])
+        Error(a), Error(b) -> Error([a, b])
+      }
     }
+    Error(a) -> Error([OtherError(string.inspect(a))])
   }
+  |> echo
 }
 
 pub fn upsert_session(session: common.GymSession) -> Result(Nil, List(DbError)) {

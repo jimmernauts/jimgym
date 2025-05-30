@@ -12,7 +12,7 @@ RUN \
     addgroup --system webapp && \
     adduser --system webapp -g webapp
 COPY --from=build /app/build/erlang-shipment /app
-COPY --from=build /app/litestream.yml /app/litestream.yml
 COPY --from=build /usr/local/bin/litestream /usr/local/bin/litestream
 WORKDIR /app
-ENTRYPOINT [ "litestream", "replicate", "-config", "./litestream.yml", "-exec", "./entrypoint.sh run" ]
+ENTRYPOINT [ "./entrypoint.sh" ]
+CMD [ "run" ]

@@ -1,4 +1,3 @@
-import cache
 import common.{SessionTemplate, SetsExerciseTemplate, TimedExerciseTemplate}
 import gleam/erlang/process
 import gleam/float
@@ -26,19 +25,11 @@ import wisp/wisp_mist
 
 // -- MAIN --
 pub fn main() {
-  let actor = cache.start()
-  sqlite_client.get_all_sessions()
-  |> result.unwrap([])
-  |> cache.set_sessions(actor)
-
-  session_templates
-  |> cache.set_templates(actor)
-
   wisp.configure_logger()
   let secret_key_base = wisp.random_string(64)
 
   let assert Ok(_) =
-    wisp_mist.handler(handle_request(_, actor), secret_key_base)
+    wisp_mist.handler(handle_request, secret_key_base)
     |> mist.new
     |> mist.bind("0.0.0.0")
     |> mist.port(8000)
@@ -47,18 +38,16 @@ pub fn main() {
   process.sleep_forever()
 }
 
-pub fn handle_request(
-  req: Request,
-  actor: process.Subject(cache.Msg),
-) -> Response {
-  let model = cache.get_sessions(actor)
+pub fn handle_request(req: Request) -> Response {
+  let model = sqlite_client.get_all_sessions()
   let assert Ok(priv) = wisp.priv_directory("jimgym")
   use <- wisp.log_request(req)
   use <- wisp.serve_static(req, under: "/", from: priv <> "/static")
-  case req.method, wisp.path_segments(req), wisp.get_query(req) {
-    Get, [], _ -> view(home(req, model), [])
-    Get, ["new"], _ -> new_session(req, actor)
-    Get, [year, month], _ -> {
+  case model, req.method, wisp.path_segments(req), wisp.get_query(req) {
+    Error(_), _, _, _ -> wisp.not_found()
+    Ok(model), Get, [], _ -> view(home(req, model), [])
+    Ok(_), Get, ["new"], _ -> new_session(req)
+    Ok(model), Get, [year, month], _ -> {
       let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
       let month =
         month |> int.parse |> result.unwrap(date.today() |> date.month_number)
@@ -77,7 +66,7 @@ pub fn handle_request(
         [],
       )
     }
-    Get, [year, month, day], params -> {
+    Ok(model), Get, [year, month, day], params -> {
       let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
       let month =
         month |> int.parse |> result.unwrap(date.today() |> date.month_number)
@@ -99,7 +88,7 @@ pub fn handle_request(
       })
       |> result.unwrap(wisp.not_found())
     }
-    Post, [year, month, day], _ -> {
+    Ok(_), Post, [year, month, day], _ -> {
       let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
       let month =
         month
@@ -107,9 +96,9 @@ pub fn handle_request(
         |> result.unwrap(date.today() |> date.month_number)
         |> date.number_to_month
       let day = day |> int.parse |> result.unwrap(date.today() |> date.day)
-      update_session(req, date.from_calendar_date(year, month, day), actor)
+      update_session(req, date.from_calendar_date(year, month, day))
     }
-    _, _, _ -> wisp.not_found()
+    _, _, _, _ -> wisp.not_found()
   }
 }
 

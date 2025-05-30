@@ -1,6 +1,4 @@
-import cache
-import common
-import gleam/erlang/process
+import common.{SessionTemplate, SetsExerciseTemplate, TimedExerciseTemplate}
 import gleam/int
 import gleam/list
 import gleam/result
@@ -8,26 +6,66 @@ import rada/date
 import sqlite_client
 import wisp.{type Request, type Response}
 
-pub fn new_session(req: Request, actor: process.Subject(cache.Msg)) -> Response {
+const session_templates = [
+  SessionTemplate(
+    "Whole Body A",
+    "💪",
+    [
+      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
+      SetsExerciseTemplate("Sled Push", 1, 3, 20.0),
+      SetsExerciseTemplate("Bench Press", 3, 10, 35.0),
+      SetsExerciseTemplate("Rows", 3, 10, 25.0),
+    ],
+  ),
+  SessionTemplate(
+    "Whole Body B",
+    "🏋️",
+    [
+      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
+      SetsExerciseTemplate("ATG Squat", 3, 10, 0.0),
+      SetsExerciseTemplate("Pull-ups", 3, 8, 14.0),
+      SetsExerciseTemplate("Shoulder Press", 3, 8, 20.0),
+    ],
+  ),
+  SessionTemplate(
+    "Rehab",
+    "🧎",
+    [
+      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
+      SetsExerciseTemplate("Patrick Step", 3, 20, 0.0),
+    ],
+  ),
+  SessionTemplate(
+    "Cardio",
+    "🏃",
+    [
+      TimedExerciseTemplate("Backwards Treadmill", 20),
+      TimedExerciseTemplate("Rowing", 10),
+    ],
+  ),
+]
+
+pub fn new_session(req: Request) -> Response {
   echo "new session req"
   let template_name =
     wisp.get_query(req)
     |> list.key_find("template")
-  let templates = cache.get_templates(actor)
   let find_template_in_cache = fn(template_name: String) -> Result(
     common.SessionTemplate,
     Nil,
   ) {
-    list.find(templates, fn(template: common.SessionTemplate) {
+    list.find(session_templates, fn(template: common.SessionTemplate) {
       template.name == template_name
     })
   }
-  let sessions = cache.get_sessions(actor)
+  let sessions = sqlite_client.get_all_sessions()
   let get_last_session_matching_template = fn(template: common.SessionTemplate) -> Result(
     common.GymSession,
     Nil,
   ) {
-    list.find(sessions, fn(session: common.GymSession) {
+    sessions
+    |> result.unwrap([])
+    |> list.find(fn(session: common.GymSession) {
       session.session_name == template.name
     })
   }
@@ -60,7 +98,6 @@ pub fn new_session(req: Request, actor: process.Subject(cache.Msg)) -> Response 
   }
 
   let return_response = fn(result: Result(a, b)) -> Response {
-    cache.refresh_sessions(actor)
     case result {
       Ok(_) ->
         wisp.redirect(
