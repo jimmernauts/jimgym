@@ -18,13 +18,11 @@ pub fn get_sqlite_path() -> Result(String, DbError) {
   wisp.priv_directory("jimgym")
   |> result.map(fn(priv) { priv <> "/data/jimgym.db" })
   |> result.map(fn(str) { "file:" <> str <> "?mode=rwc" })
-  |> echo
   |> result.map_error(fn(_) { EnvVarError })
 }
 
 pub fn get_all_sessions() -> Result(List(common.GymSession), List(DbError)) {
   //use conn <- sqlight.with_connection(get_sqlite_path() |> result.unwrap(""))
-  echo "starting get_all_sessions"
   let open = sqlight.open(get_sqlite_path() |> result.unwrap(""))
   case open {
     Ok(conn) -> {
@@ -83,7 +81,6 @@ pub fn get_all_sessions() -> Result(List(common.GymSession), List(DbError)) {
     }
     Error(a) -> Error([OtherError(string.inspect(a))])
   }
-  |> echo
 }
 
 pub fn upsert_session(session: common.GymSession) -> Result(Nil, List(DbError)) {

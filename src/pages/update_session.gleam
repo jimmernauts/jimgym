@@ -36,7 +36,6 @@ pub fn update_session(req: Request, date: date.Date) -> Response {
         [sqlite_client.OtherError(err)]
       },
     )
-    |> echo
     |> return_response
   }
 }

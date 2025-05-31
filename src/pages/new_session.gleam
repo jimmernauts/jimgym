@@ -46,7 +46,6 @@ const session_templates = [
 ]
 
 pub fn new_session(req: Request) -> Response {
-  echo "new session req"
   let template_name =
     wisp.get_query(req)
     |> list.key_find("template")
