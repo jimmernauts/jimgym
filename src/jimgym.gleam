@@ -44,7 +44,10 @@ pub fn handle_request(req: Request) -> Response {
   use <- wisp.log_request(req)
   use <- wisp.serve_static(req, under: "/", from: priv <> "/static")
   case model, req.method, wisp.path_segments(req), wisp.get_query(req) {
-    Error(_), _, _, _ -> wisp.not_found()
+    Error(err), _, _, _ -> {
+      echo err
+      wisp.not_found()
+    }
     Ok(model), Get, [], _ -> view(home(req, model), [])
     Ok(_), Get, ["new"], _ -> new_session(req)
     Ok(model), Get, [year, month], _ -> {
@@ -193,7 +196,7 @@ pub fn home(_req: Request, model: List(common.GymSession)) -> List(Element(a)) {
     section(
       [
         class(
-          "mt-4 font-slab flex flex-col gap-4  col-[main-start_/_main-end] row-start-[content]",
+          "mt-2 font-slab flex flex-col gap-4  col-[main-start_/_main-end] row-start-[content]",
         ),
       ],
       [

@@ -1,9 +1,9 @@
 FROM erlang:28.0.0.0-alpine AS build
 RUN apk add build-base && apk add sqlite
+RUN wget https://github.com/tigrisdata/tigrisfs/releases/download/v1.2.1/tigrisfs_1.2.1_linux_amd64.apk
+RUN apk add tigrisfs_1.2.1_linux_amd64.apk --allow-untrusted
 COPY --from=ghcr.io/gleam-lang/gleam:v1.10.0-erlang-alpine /bin/gleam /bin/gleam
 COPY . /app/
-ADD https://github.com/benbjohnson/litestream/releases/download/v0.3.13/litestream-v0.3.13-linux-amd64.tar.gz /tmp/litestream.tar.gz
-RUN tar -C /usr/local/bin -xzf /tmp/litestream.tar.gz
 RUN cd /app && gleam export erlang-shipment
 
 
@@ -12,6 +12,8 @@ RUN \
     addgroup --system webapp && \
     adduser --system webapp -g webapp
 COPY --from=build /app/build/erlang-shipment /app
-COPY --from=build /usr/local/bin/litestream /usr/local/bin/litestream
+COPY --from=build /usr/local/bin/tigrisfs /usr/local/bin/tigrisfs
 WORKDIR /app
-ENTRYPOINT [ "litestream","replicate","-config","./jimgym/priv/litestream.yml","-exec","./entrypoint.sh run" ]
+## NEEDS BUILD ARG?
+RUN tigrisfs ${SQLITE_REPLICA_BUCKET} ./data
+ENTRYPOINT [ "./entrypoint.sh","run" ]

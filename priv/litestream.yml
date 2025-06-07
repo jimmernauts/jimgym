@@ -1,7 +1,0 @@
-dbs:
-  - path: ${SQLITE_PATH}
-    replicas:
-      - type: s3
-        bucket: jimgym
-        path: jimgym.db
-        endpoint: https://fly.storage.tigris.dev

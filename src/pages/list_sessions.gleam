@@ -22,12 +22,12 @@ pub fn list_sessions(
           "text-6xl font-bold col-[main-start_/_main-end] row-start-[header]",
         ),
       ],
-      [text("💪🤸‍♂️🏋️")],
+      [a([href("/")], [text("💪🤸‍♂️🏋️")])],
     ),
     section(
       [
         class(
-          "col-[main-start_/_main-end] row-start-[content] grid-cols-7 grid gap-1 border-1 border-uchu-yin p-1",
+          "mt-2 col-[main-start_/_main-end] row-start-[content] grid-cols-7 grid gap-1 border-1 border-uchu-yin p-1",
         ),
       ],
       article([class("col-span-7 flex row-span-1 justify-center")], [

@@ -1,4 +1,5 @@
 import common
+import envoy
 import gleam/dict
 import gleam/dynamic/decode
 import gleam/list
@@ -6,7 +7,6 @@ import gleam/result
 import gleam/string
 import rada/date
 import sqlight
-import wisp
 
 pub type DbError {
   QueryError(sqlight.Error)
@@ -15,8 +15,7 @@ pub type DbError {
 }
 
 pub fn get_sqlite_path() -> Result(String, DbError) {
-  wisp.priv_directory("jimgym")
-  |> result.map(fn(priv) { priv <> "/data/jimgym.db" })
+  envoy.get("SQLITE_DB_PATH")
   |> result.map(fn(str) { "file:" <> str <> "?mode=rwc" })
   |> result.map_error(fn(_) { EnvVarError })
 }
