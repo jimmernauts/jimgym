@@ -44,7 +44,7 @@ pub fn get_session(
     form(
       [
         class(
-          "px-2 row-start-[content] overflow-y-scroll gap-1 grid col-[main-start_/_main-end] grid-cols-6 grid-auto-rows w-full text-sm",
+          "px-2 row-start-[content] overflow-y-scroll gap-1 grid col-[main-start_/_main-end] grid-cols-6 grid-rows-auto w-full text-sm",
         ),
         id("session-form"),
       ],

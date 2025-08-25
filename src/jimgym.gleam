@@ -26,6 +26,7 @@ import wisp/wisp_mist
 // -- MAIN --
 pub fn main() {
   wisp.configure_logger()
+  wisp.set_logger_level(wisp.DebugLevel)
   let secret_key_base = wisp.random_string(64)
 
   let assert Ok(_) =
@@ -33,7 +34,7 @@ pub fn main() {
     |> mist.new
     |> mist.bind("0.0.0.0")
     |> mist.port(8000)
-    |> mist.start_http
+    |> mist.start
 
   process.sleep_forever()
 }
@@ -157,8 +158,6 @@ pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response 
       html.title([], "Jim's Gym Tracker"),
       html.link([rel("icon"), href("/favicon.svg"), type_("image/svg+xml")]),
       html.link([rel("stylesheet"), href("/jimgym.css")]),
-      html.script([attribute.src("/fixi.js")], ""),
-      html.script([attribute.src("/ext-fixi.js")], ""),
     ]),
     html.body([], [
       html.main(
@@ -176,6 +175,8 @@ pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response 
         ],
         body |> common.list_append_one(view_nav(nav_elements)),
       ),
+      html.script([attribute.src("/fixi.js")], ""),
+      html.script([attribute.src("/ext-fixi.js")], ""),
     ]),
   ])
   |> element.to_document_string_tree
@@ -299,7 +300,7 @@ fn add_input_button() -> Element(a) {
       [
         id("add-input-picker"),
         attribute.popover("auto"),
-        class("rounded border-1 border-uchu-yin bg-white p-2 absolute"),
+        class("rounded border border-uchu-yin bg-white p-2 absolute"),
         styles([
           #("inset", "auto"),
           #("position-anchor", "--add-input-picker"),
@@ -342,7 +343,7 @@ fn view_nav(children: List(Element(a))) -> Element(a) {
   nav(
     [
       class(
-        "col-[main-start_/_main-end] row-start-[footer] text-2xl p-4 border-t-1 border-uchu-yin gap-6 flex justify-around flex-row",
+        "col-[main-start_/_main-end] row-start-[footer] text-2xl p-4 border-t border-uchu-yin gap-6 flex justify-around flex-row",
       ),
     ],
     [a([attribute.href("/"), class("self-center")], [text("🏡")]), ..children],

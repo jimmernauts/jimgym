@@ -116,29 +116,30 @@ input {
   --color-uchu-yin: oklch(var(--color-uchu-yin-raw));
 }
 
-@utility subgrid-cols {
+@layer utilities {
+ subgrid-cols {
     display: grid;
     grid-template-columns: subgrid
 }
 
-@utility flex-col {
+ flex-col {
     flex-direction: column;
     display: flex;
 }
 
-@utility flex-row {
+ flex-row {
     flex-direction: row;
     display: flex;
 }
 
-@utility subgrid-rows {
+ subgrid-rows {
     display: grid;
     grid-template-rows: subgrid
 }
-@utility grid-rows-auto {
+ grid-rows-auto {
     grid-auto-rows: minmax(100px, max-content)
 }
-@utility input {
+ input {
     & [type="number"] { 
         &::-webkit-inner-spin-button {
             -webkit-appearance: none;
@@ -151,7 +152,8 @@ input {
     }
     -moz-appearance: textfield;
     appearance: textfield;
-}@utility input-base {
+}
+ input-base {
     border-width: 0px;
     border-bottom-width: 0px;
     padding-top: 0px;
@@ -159,7 +161,7 @@ input {
     line-height: inherit;
     background-color: transparent;
 }
-@utility textarea {
+textarea {
     border-width: 0px;
     border-bottom-width: 0px;
     padding-top: 0px;
@@ -167,7 +169,7 @@ input {
     line-height: inherit;
     background-color: transparent;
 }
-@utility input-focus {
+input-focus {
     & :focus {
     outline: 2px solid transparent;
     outline-offset: 2px;
@@ -180,7 +182,7 @@ input {
     border-bottom-width: 1px;
     }
 }
-@utility textarea {
+textarea {
     & :focus {
         outline: 2px solid transparent;
         outline-offset: 2px;
@@ -193,19 +195,19 @@ input {
         border-bottom-width: 1px;
     }
 }
-@utility fieldset {
+fieldset {
     min-width: 0;
 }
-
-@utility details {
+details {
     & [open]::details-content {
         display: contents;
     }
 }
 
-@utility fill-diagonal-* {
+fill-diagonal-* {
     background-color: --value(--color-*);
     opacity: 0.8;
     background-size: 10px 10px;
     background-image: repeating-linear-gradient(45deg, #fff 0, #fff 1px, --value(--color-*) 0, --value(--color-*) 50%);
+}
 }
