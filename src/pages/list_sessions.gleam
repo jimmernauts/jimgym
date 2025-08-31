@@ -5,7 +5,7 @@ import gleam/list
 import gleam/result
 import lustre/attribute.{class, href, id}
 import lustre/element.{type Element}
-import lustre/element/html.{a, article, div, h1, p, section, td, text, tr}
+import lustre/element/html.{a, article, div, h1, h2, section, span, td, text, tr}
 import rada/date
 import wisp.{type Request}
 
@@ -16,13 +16,22 @@ pub fn list_sessions(
   month: Int,
 ) -> List(Element(a)) {
   [
-    h1(
+    div(
       [
         class(
-          "text-6xl font-bold col-[main-start_/_main-end] row-start-[header]",
+          "text-6xl font-bold col-[main-start_/_main-end] row-start-[header] flex gap-8",
         ),
       ],
-      [a([href("/")], [text("💪🤸‍♂️🏋️")])],
+      [
+        a([href("/")], [text("💪🤸‍♂️🏋️")]),
+        h2([], [
+          text(
+            month |> date.number_to_month |> month_to_label
+            <> " "
+            <> year |> int.to_string,
+          ),
+        ]),
+      ],
     ),
     section(
       [
@@ -30,59 +39,91 @@ pub fn list_sessions(
           "mt-2 col-[main-start_/_main-end] row-start-[content] grid-cols-7 grid gap-1 border-1 border-uchu-yin p-1",
         ),
       ],
-      article([class("col-span-7 flex row-span-1 justify-center")], [
-        p([], [
-          text(
-            month |> date.number_to_month |> month_to_label
-            <> " "
-            <> year |> int.to_string,
-          ),
-        ]),
-      ])
+      list.flatten([
+        generate_calendar(month |> date.number_to_month, year, model)
         |> common.list_append_one(
-          ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            |> list.map(fn(day) {
-              html.article(
-                [class("col-span-1 row-start-2 flex justify-center")],
-                [text(day)],
-              )
-            }),
-          _,
+          div([class("hidden"), id("mini_details")], []),
         )
-        |> list.append(
-          generate_calendar_tiles(month |> date.number_to_month, year, model)
-          |> common.list_append_one(
-            div([class("hidden"), id("mini_details")], []),
-          )
-          |> common.list_append_one(
-            html.nav(
-              [class("col-span-7 subgrid-cols row-span-1"), id("calendar_nav")],
-              [
-                a(
-                  [
-                    class(
-                      "col-span-1 col-start-1 self-center justify-self-center",
-                    ),
-                    href("/" <> prev_month(month, year)),
-                  ],
-                  [text("<")],
-                ),
-                a(
-                  [
-                    class(
-                      "col-span-1 col-start-7 self-center justify-self-center",
-                    ),
-                    href("/" <> next_month(month, year)),
-                  ],
-                  [text(">")],
-                ),
-              ],
-            ),
+        |> common.list_append_one(
+          html.nav(
+            [class("col-span-7 subgrid-cols row-span-1"), id("calendar_nav")],
+            [
+              a(
+                [
+                  class(
+                    "col-span-1 col-start-1 self-center justify-self-center",
+                  ),
+                  href("/" <> prev_month(month, year)),
+                ],
+                [text("<")],
+              ),
+              a(
+                [
+                  class(
+                    "col-span-1 col-start-7 self-center justify-self-center",
+                  ),
+                  href("/" <> next_month(month, year)),
+                ],
+                [text(">")],
+              ),
+            ],
           ),
         ),
+      ]),
     ),
   ]
 }
+
+/// TODO: make it all fit in one list, sort out the styling issue with the nav arrows inside the calendar
+// 
+// 
+// 
+// 
+// 
+//         |> common.list_append_one(
+//           ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+//             |> list.map(fn(day) {
+//               article(
+//                 [class("col-span-1 row-start-2 flex justify-center")],
+//                 [text(day)],
+//               )
+//             }),
+//           _,
+//         )
+//         |> list.append(
+//           generate_calendar(month |> date.number_to_month, year, model)
+//           |> common.list_append_one(
+//             div([class("hidden"), id("mini_details")], []),
+//           )
+//           |> common.list_append_one(
+//             html.nav(
+//               [class("col-span-7 subgrid-cols row-span-1"), id("calendar_nav")],
+//               [
+//                 a(
+//                   [
+//                     class(
+//                       "col-span-1 col-start-1 self-center justify-self-center",
+//                     ),
+//                     href("/" <> prev_month(month, year)),
+//                   ],
+//                   [text("<")],
+//                 ),
+//                 a(
+//                   [
+//                     class(
+//                       "col-span-1 col-start-7 self-center justify-self-center",
+//                     ),
+//                     href("/" <> next_month(month, year)),
+//                   ],
+//                   [text(">")],
+//                 ),
+//               ],
+//             ),
+//           ),
+//         ),
+//     ),
+//   ]
+// }
 
 pub fn view_exercise_history_group(
   exercises: List(common.Exercise),
@@ -201,6 +242,22 @@ pub fn prev_month(month: Int, year: Int) -> String {
     1 -> int.to_string(year - 1) <> "/12"
     _ -> int.to_string(year) <> "/" <> int.to_string(month - 1)
   }
+}
+
+pub fn generate_calendar(
+  month: date.Month,
+  year: Int,
+  sessions: List(common.GymSession),
+) -> List(Element(a)) {
+  list.flatten([
+    ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+      |> list.map(fn(day) {
+        article([class("col-span-1 row-start-1 flex justify-center")], [
+          text(day),
+        ])
+      }),
+    generate_calendar_tiles(month, year, sessions),
+  ])
 }
 
 pub fn generate_calendar_tiles(

@@ -15,8 +15,7 @@ pub type DbError {
 }
 
 pub fn get_sqlite_path() -> Result(String, DbError) {
-  envoy.get("SQLITE_DB_PATH")
-  |> result.map(fn(str) { "file:" <> str <> "?mode=rwc&cache=shared" })
+  envoy.get("DATABASE_PATH")
   |> result.map_error(fn(_) { EnvVarError })
 }
 
