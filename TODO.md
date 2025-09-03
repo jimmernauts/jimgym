@@ -5,3 +5,4 @@
 * inplace save for edit session view
 * proper distinction between session in progress and session closed
 * ordering in session model / edit session view
+* font size
