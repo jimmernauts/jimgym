@@ -19,13 +19,13 @@ pub fn get_session(
     h1(
       [
         class(
-          "font-slab items-center text-6xl font-bold col-[main-start_/_main-end] row-start-[header] flex flex-row gap-2",
+          "font-slab items-center text-4xl font-bold col-[main-start_/_main-end] row-start-[header] flex flex-row gap-2",
         ),
       ],
       [
         html.input([
           attribute.form("session-form"),
-          class("text-6xl"),
+          class("text-4xl"),
           id("session_emoji"),
           name("session_emoji"),
           type_("text"),
@@ -33,7 +33,7 @@ pub fn get_session(
         ]),
         html.input([
           attribute.form("session-form"),
-          class("text-6xl"),
+          class("text-4xl"),
           id("session_name"),
           name("session_name"),
           type_("text"),
@@ -69,6 +69,11 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
           ),
         ],
         [
+          // TODO: add here increment/decrement buttons.
+          // they should be able to trigger an ext-fixi listener that can then modify
+          // the value of the associated input element.
+          // the index we are encoding here in the name attribute can be sent to the ext-fixi listener,
+          // maybe using the fx-action attribute, like fx-action="/increment/reps/NN" or action="decrement/reps/NN"
           html.input([
             class("w-[4ch] text-right col-start-1 col-span-1"),
             type_("number"),

@@ -1,49 +1,11 @@
-import common.{SessionTemplate, SetsExerciseTemplate, TimedExerciseTemplate}
+import common.{session_templates}
+
 import gleam/int
 import gleam/list
 import gleam/result
 import rada/date
 import sqlite_client
 import wisp.{type Request, type Response}
-
-const session_templates = [
-  SessionTemplate(
-    "Whole Body A",
-    "💪",
-    [
-      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
-      SetsExerciseTemplate("Sled Push", 1, 3, 20.0),
-      SetsExerciseTemplate("Bench Press", 3, 10, 35.0),
-      SetsExerciseTemplate("Rows", 3, 10, 25.0),
-    ],
-  ),
-  SessionTemplate(
-    "Whole Body B",
-    "🏋️",
-    [
-      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
-      SetsExerciseTemplate("ATG Squat", 3, 10, 0.0),
-      SetsExerciseTemplate("Pull-ups", 3, 8, 14.0),
-      SetsExerciseTemplate("Shoulder Press", 3, 8, 20.0),
-    ],
-  ),
-  SessionTemplate(
-    "Rehab",
-    "🧎",
-    [
-      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
-      SetsExerciseTemplate("Patrick Step", 3, 20, 0.0),
-    ],
-  ),
-  SessionTemplate(
-    "Cardio",
-    "🏃",
-    [
-      TimedExerciseTemplate("Backwards Treadmill", 20),
-      TimedExerciseTemplate("Rowing", 10),
-    ],
-  ),
-]
 
 pub fn new_session(req: Request) -> Response {
   let template_name =

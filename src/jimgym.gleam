@@ -1,4 +1,4 @@
-import common.{SessionTemplate, SetsExerciseTemplate, TimedExerciseTemplate}
+import common.{SetsExerciseTemplate, TimedExerciseTemplate, session_templates}
 import gleam/erlang/process
 import gleam/float
 import gleam/http.{Get, Post}
@@ -106,45 +106,6 @@ pub fn handle_request(req: Request) -> Response {
   }
 }
 
-const session_templates = [
-  SessionTemplate(
-    "Whole Body A",
-    "💪",
-    [
-      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
-      SetsExerciseTemplate("Sled Push", 1, 3, 20.0),
-      SetsExerciseTemplate("Bench Press", 3, 10, 35.0),
-      SetsExerciseTemplate("Rows", 3, 10, 25.0),
-    ],
-  ),
-  SessionTemplate(
-    "Whole Body B",
-    "🏋️",
-    [
-      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
-      SetsExerciseTemplate("ATG Squat", 3, 10, 0.0),
-      SetsExerciseTemplate("Pull-ups", 3, 8, 14.0),
-      SetsExerciseTemplate("Shoulder Press", 3, 8, 20.0),
-    ],
-  ),
-  SessionTemplate(
-    "Rehab",
-    "🧎",
-    [
-      SetsExerciseTemplate("Sled Drag", 1, 5, 20.0),
-      SetsExerciseTemplate("Patrick Step", 3, 20, 0.0),
-    ],
-  ),
-  SessionTemplate(
-    "Cardio",
-    "🏃",
-    [
-      TimedExerciseTemplate("Backwards Treadmill", 20),
-      TimedExerciseTemplate("Rowing", 10),
-    ],
-  ),
-]
-
 //----VIEWS------------------------------------------------------------
 
 pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response {
@@ -169,7 +130,7 @@ pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response 
     lg:grid-cols-[[start]_1fr_[full-start]_3fr_[main-start]_95%_[main-end]_3fr_[full-end]_1fr_[end]]
     md:grid-cols-[[start_full-start]_1fr_[main-start]_95%_[main-end]_1fr_[full-end_end]]
     grid-cols-[[start_full-start_main-start]_100%_[main-end_full-end_end]]
-    grid-rows-[[header]_9%_[content]_80%_[footer]_9%]
+    grid-rows-[[header]_8%_[content]_82%_[footer]_8%]
     font-hand",
           ),
         ],
@@ -189,7 +150,7 @@ pub fn home(_req: Request, model: List(common.GymSession)) -> List(Element(a)) {
     h1(
       [
         class(
-          "text-6xl font-bold col-[main-start_/_main-end] row-start-[header]",
+          "text-5xl flex items-center font-bold col-[main-start_/_main-end] row-start-[header]",
         ),
       ],
       [text("💪🤸‍♂️🏋️")],

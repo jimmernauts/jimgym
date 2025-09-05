@@ -5,7 +5,7 @@ import gleam/list
 import gleam/result
 import lustre/attribute.{class, href, id}
 import lustre/element.{type Element}
-import lustre/element/html.{a, article, div, h1, h2, section, span, td, text, tr}
+import lustre/element/html.{a, article, div, h2, section, td, text, tr}
 import rada/date
 import wisp.{type Request}
 
@@ -19,7 +19,7 @@ pub fn list_sessions(
     div(
       [
         class(
-          "text-6xl font-bold col-[main-start_/_main-end] row-start-[header] flex gap-8",
+          "text-4xl font-slab font-bold col-[main-start_/_main-end] row-start-[header] flex items-center gap-8",
         ),
       ],
       [
@@ -73,57 +73,6 @@ pub fn list_sessions(
     ),
   ]
 }
-
-/// TODO: make it all fit in one list, sort out the styling issue with the nav arrows inside the calendar
-// 
-// 
-// 
-// 
-// 
-//         |> common.list_append_one(
-//           ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-//             |> list.map(fn(day) {
-//               article(
-//                 [class("col-span-1 row-start-2 flex justify-center")],
-//                 [text(day)],
-//               )
-//             }),
-//           _,
-//         )
-//         |> list.append(
-//           generate_calendar(month |> date.number_to_month, year, model)
-//           |> common.list_append_one(
-//             div([class("hidden"), id("mini_details")], []),
-//           )
-//           |> common.list_append_one(
-//             html.nav(
-//               [class("col-span-7 subgrid-cols row-span-1"), id("calendar_nav")],
-//               [
-//                 a(
-//                   [
-//                     class(
-//                       "col-span-1 col-start-1 self-center justify-self-center",
-//                     ),
-//                     href("/" <> prev_month(month, year)),
-//                   ],
-//                   [text("<")],
-//                 ),
-//                 a(
-//                   [
-//                     class(
-//                       "col-span-1 col-start-7 self-center justify-self-center",
-//                     ),
-//                     href("/" <> next_month(month, year)),
-//                   ],
-//                   [text(">")],
-//                 ),
-//               ],
-//             ),
-//           ),
-//         ),
-//     ),
-//   ]
-// }
 
 pub fn view_exercise_history_group(
   exercises: List(common.Exercise),

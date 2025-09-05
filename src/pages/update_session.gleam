@@ -10,7 +10,7 @@ import rada/date
 import sqlite_client
 import wisp.{type Request, type Response}
 
-pub fn update_session(req: Request, date: date.Date) -> Response {
+pub fn update_session(req: Request, req_date: date.Date) -> Response {
   // pretty similar to new_session
 
   // get form data from req object
@@ -22,13 +22,21 @@ pub fn update_session(req: Request, date: date.Date) -> Response {
   // redirect to the get session page for this session
   let return_response = fn(result: Result(a, b)) -> Response {
     case result {
-      Ok(_) -> wisp.redirect("/")
+      Ok(_) ->
+        wisp.redirect(
+          "/"
+          <> date.year(req_date) |> int.to_string
+          <> "/"
+          <> date.month_number(req_date) |> int.to_string
+          <> "/"
+          <> date.day(req_date) |> int.to_string,
+        )
       Error(_) -> wisp.internal_server_error()
     }
   }
   use fd <- wisp.require_form(req)
   {
-    parse_formdata_to_session(date, fd)
+    parse_formdata_to_session(req_date, fd)
     |> common.try_replacing_error(
       fn(session) { sqlite_client.upsert_session(session) },
       fn(err) {
