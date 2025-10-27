@@ -1,11 +1,12 @@
+# jimgym
 
+This is the repository for jimgym, a web application for managing and tracking gym workouts.
 
-## Deployment
+Written in Gleam compiling to the Erlang backend, using Lustre for server-side rendered HTML.
 
-### Local docker
+[fixi.js](https://github.com/bigskysoftware/fixi) is used for client-side interactivity.
+Some client-side interactions that manipulate the DOM without server interaction (eg: adding a new form field for a new exercise entry) are written in JavaScript as [fixi extensions](https://github.com/bigskysoftware/fixi) in `priv/static/ext-fixi.js`.
 
-to build and run the docker image locally:
-```
-docker build -t jimgym:latest .
-docker run --rm --name jimgym -p 8000:8000 --env-file .env jimgym:latest
-```
+A SQLite database is used for data storage. It is located at data/ relative to the project root. In production, this is overriden using an env var (DATABASE_URL and DATABASE_PATH) to the /data/ absolute path, which points to a fly volume. No additional database backup or syncing is currently used.
+
+Just task runner has a couple of simple commands for local development.

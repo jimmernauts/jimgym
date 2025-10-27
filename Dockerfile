@@ -1,6 +1,6 @@
 FROM erlang:28.0.0.0-alpine AS build
 RUN apk add --no-cache build-base sqlite
-COPY --from=ghcr.io/gleam-lang/gleam:v1.12.0-erlang-alpine /bin/gleam /bin/gleam
+COPY --from=ghcr.io/gleam-lang/gleam:v1.13.0-erlang-alpine /bin/gleam /bin/gleam
 WORKDIR /app
 
 # 1) Deps metadata first (cacheable)
