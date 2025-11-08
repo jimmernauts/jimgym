@@ -1,4 +1,4 @@
-FROM erlang:28.0.0.0-alpine AS build
+FROM erlang:28.1.0.0-alpine AS build
 RUN apk add --no-cache build-base sqlite
 COPY --from=ghcr.io/gleam-lang/gleam:v1.13.0-erlang-alpine /bin/gleam /bin/gleam
 WORKDIR /app
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/gleam \
     gleam export erlang-shipment
 
 
-FROM erlang:28.0.0.0-alpine
+FROM erlang:28.1.0.0-alpine
 RUN \
     addgroup --system webapp && \
     adduser --system webapp -g webapp
@@ -33,6 +33,8 @@ COPY /entrypoint_wrapper.sh /app/entrypoint_wrapper.sh
 RUN chmod +x /app/entrypoint_wrapper.sh
 
 COPY --from=ghcr.io/amacneil/dbmate:latest /usr/local/bin/dbmate /bin/dbmate
+COPY --from=amazon/aws-cli:latest /usr/local/aws-cli/ /usr/local/aws-cli/
+COPY --from=amazon/aws-cli:latest /usr/local/bin/aws /usr/local/bin/aws
 
 ENTRYPOINT [ "./entrypoint_wrapper.sh" ]
 CMD ["run"]
