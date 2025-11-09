@@ -4,6 +4,9 @@ mkdir -p /data
 dbmate create
 dbmate up
 
+which aws  # Should output the path to the AWS CLI
+aws --version  # Should show the AWS CLI version
+
 # Database backup to S3-compatible storage (Tigris)
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ] && [ -n "$S3_BUCKET" ]; then
     BACKUP_FILENAME="db_backup_$(date +%Y%m%d_%H%M%S).db"

@@ -35,6 +35,8 @@ RUN chmod +x /app/entrypoint_wrapper.sh
 COPY --from=ghcr.io/amacneil/dbmate:latest /usr/local/bin/dbmate /bin/dbmate
 COPY --from=amazon/aws-cli:latest /usr/local/aws-cli/ /usr/local/aws-cli/
 COPY --from=amazon/aws-cli:latest /usr/local/bin/aws /usr/local/bin/aws
+ENV PATH="/usr/local/aws-cli/v2/current/bin:${PATH}"
+
 
 ENTRYPOINT [ "./entrypoint_wrapper.sh" ]
 CMD ["run"]
