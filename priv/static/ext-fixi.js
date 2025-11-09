@@ -17,6 +17,57 @@ document.addEventListener("fx:config", (evt) => {
     evt.detail.cfg.fetch = () => ({ text: () => "" });
   }
 
-  // TODO: if the action is "increment" or "decrement", override the fetch function to
-  // instead manipulate the DOM and modify the value of the associated input element.
+  // if the action is "increment-reps/{name}/{index}" or "decrement-reps/{name}/{index}",
+  // override the fetch function to instead manipulate the DOM and modify the value of the associated input element.
+  if (evt.detail.cfg.action.startsWith("increment-reps/")) {
+    let [name, index] = evt.detail.cfg.action.split("/").slice(1);
+    let input = evt.detail.cfg.target.parentElement.querySelector(
+      `input[name="${name}|reps|${index}"]`
+    );
+    evt.detail.cfg.fetch = () => ({
+      text: () => {
+        input.value = parseInt(input.value) + 1;
+        evt.detail.cfg.abort();
+      },
+    });
+  }
+  if (evt.detail.cfg.action.startsWith("decrement-reps/")) {
+    let [name, index] = evt.detail.cfg.action.split("/").slice(1);
+    let input = evt.detail.cfg.target.parentElement.querySelector(
+      `input[name="${name}|reps|${index}"]`
+    );
+    evt.detail.cfg.fetch = () => ({
+      text: () => {
+        input.value = parseInt(input.value) - 1;
+        evt.detail.cfg.abort();
+      },
+    });
+  }
+
+  // if the action is "increment-weight/{name}/{index}" or "decrement-weight/{name}/{index}",
+  // override the fetch function to instead manipulate the DOM and modify the value of the associated input element.
+  if (evt.detail.cfg.action.startsWith("increment-weight/")) {
+    let [name, index] = evt.detail.cfg.action.split("/").slice(1);
+    let input = evt.detail.cfg.target.parentElement.querySelector(
+      `input[name="${name}|weight|${index}"]`
+    );
+    evt.detail.cfg.fetch = () => ({
+      text: () => {
+        input.value = parseFloat(input.value) + 0.5;
+        evt.detail.cfg.abort();
+      },
+    });
+  }
+  if (evt.detail.cfg.action.startsWith("decrement-weight/")) {
+    let [name, index] = evt.detail.cfg.action.split("/").slice(1);
+    let input = evt.detail.cfg.target.parentElement.querySelector(
+      `input[name="${name}|weight|${index}"]`
+    );
+    evt.detail.cfg.fetch = () => ({
+      text: () => {
+        input.value = parseFloat(input.value) - 0.5;
+        evt.detail.cfg.abort();
+      },
+    });
+  }
 });

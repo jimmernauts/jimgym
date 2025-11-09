@@ -32,16 +32,9 @@ COPY --from=build /app/schema /app/schema
 COPY /entrypoint_wrapper.sh /app/entrypoint_wrapper.sh
 RUN chmod +x /app/entrypoint_wrapper.sh
 
-RUN apk add --no-cache \
-    libc6-compat \
-    groff \
-    less
+RUN apk add --no-cache aws-cli
 
 COPY --from=ghcr.io/amacneil/dbmate:latest /usr/local/bin/dbmate /bin/dbmate
-COPY --from=amazon/aws-cli:latest /usr/local/aws-cli/ /usr/local/aws-cli/
-COPY --from=amazon/aws-cli:latest /usr/local/bin/aws /usr/local/bin/aws
-ENV PATH="/usr/local/aws-cli/v2/current/bin:${PATH}"
-
 
 ENTRYPOINT [ "./entrypoint_wrapper.sh" ]
 CMD ["run"]

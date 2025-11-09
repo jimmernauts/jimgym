@@ -44,7 +44,7 @@ pub fn get_session(
     form(
       [
         class(
-          "px-2 row-start-[content] overflow-y-scroll gap-1 grid col-[main-start_/_main-end] grid-cols-6 grid-rows-auto w-full text-sm",
+          "row-start-[content] overflow-y-scroll gap-1 gap-y-2 grid col-[main-start_/_main-end] grid-cols-12 grid-rows-auto w-full text-sm",
         ),
         id("session-form"),
       ],
@@ -65,43 +65,24 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
       div(
         [
           class(
-            "border-b border-gray-100 col-span-6 subgrid-cols gap-1 items-baseline",
+            "border-b text-lg py-2 border-gray-100 col-span-full subgrid-cols gap-1 items-baseline",
           ),
         ],
         [
-          // TODO: add here increment/decrement buttons.
-          // they should be able to trigger an ext-fixi listener that can then modify
-          // the value of the associated input element.
-          // the index we are encoding here in the name attribute can be sent to the ext-fixi listener,
-          // maybe using the fx-action attribute, like fx-action="/increment/reps/NN" or action="decrement/reps/NN"
+          rep_input(name, reps, index),
           html.input([
-            class("w-[4ch] text-right col-start-1 col-span-1"),
-            type_("number"),
-            attribute.step("1"),
-            attribute.value(reps |> int.to_string),
-            attribute.name(exercise.name <> "|reps|" <> index |> int.to_string),
-          ]),
-          html.input([
-            class("col-start-2 col-span-2 text-left flex justify-start"),
+            class("col-start-4 col-span-5 text-left field-sizing-content"),
             type_("text"),
             attribute.value(name),
             attribute.name(exercise.name <> "|name|" <> index |> int.to_string),
           ]),
-          html.input([
-            class(
-              "w-[3.5ch] col-start-4 text-left col-span-1 flex justify-start  ",
-            ),
-            type_("number"),
-            attribute.step("0.5"),
-            attribute.value(weight |> common.float_to_intstring),
-            attribute.name(
-              exercise.name <> "|weight|" <> index |> int.to_string,
-            ),
-          ]),
-          text(" kg"),
+          case weight {
+            -1.0 -> element.none()
+            _ -> weight_input(name, weight, index)
+          },
           html.button(
             [
-              class("col-start-6"),
+              class("col-start-12 text-sm"),
               attribute("fx-action", "delete"),
               attribute("fx-swap", "outerHTML"),
             ],
@@ -123,14 +104,14 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
           text("m"),
         ]),
         html.input([
-          class("col-start-2 col-span-2 text-left flex justify-start"),
+          class("col-start-2 col-span-6 text-left flex justify-start"),
           type_("text"),
           attribute.value(name),
           attribute.name(exercise.name <> "|name|" <> index |> int.to_string),
         ]),
         html.button(
           [
-            class("col-start-6"),
+            class("col-start-12 text-base"),
             attribute("fx-action", "delete"),
             attribute("fx-swap", "outerHTML"),
           ],
@@ -140,6 +121,73 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
   }
 }
 
+fn rep_input(name: String, reps: Int, index: Int) {
+  div([class("col-span-3 text-sm items-baseline flex justify-evenly")], [
+    html.button(
+      [
+        attribute(
+          "fx-action",
+          "decrement-reps/" <> name <> "/" <> index |> int.to_string,
+        ),
+        attribute("fx-swap", "none"),
+      ],
+      [text("➖")],
+    ),
+    html.input([
+      class("w-[4ch] text-lg text-center"),
+      type_("number"),
+      attribute.step("1"),
+      attribute.value(reps |> int.to_string),
+      attribute.name(name <> "|reps|" <> index |> int.to_string),
+    ]),
+    html.button(
+      [
+        attribute(
+          "fx-action",
+          "increment-reps/" <> name <> "/" <> index |> int.to_string,
+        ),
+        attribute("fx-swap", "none"),
+      ],
+      [text("➕")],
+    ),
+  ])
+}
+
+fn weight_input(name: String, weight: Float, index: Int) {
+  div([class("col-span-3 text-sm items-baseline flex justify-evenly")], [
+    html.button(
+      [
+        attribute(
+          "fx-action",
+          "decrement-weight/" <> name <> "/" <> index |> int.to_string,
+        ),
+        attribute("fx-swap", "none"),
+      ],
+      [text("➖")],
+    ),
+    html.input([
+      class("w-[3.5ch] text-right text-lg col-span-1 flex justify-start  "),
+      type_("number"),
+      attribute.step("0.5"),
+      attribute.value(weight |> common.float_to_intstring),
+      attribute.name(name <> "|weight|" <> index |> int.to_string),
+    ]),
+    html.text("kg"),
+    html.button(
+      [
+        attribute(
+          "fx-action",
+          "increment-weight/" <> name <> "/" <> index |> int.to_string,
+        ),
+        attribute("fx-swap", "none"),
+      ],
+      [text("➕")],
+    ),
+  ])
+}
+
+//TODO: this is the default template we get when we insert a new exercise. 
+// it needs updating to match the structure of view_exercise_input function above
 fn exercise_input_template() -> Element(a) {
   element.fragment([
     html.template([id("/new-sets-exercise-input")], [
@@ -151,7 +199,7 @@ fn exercise_input_template() -> Element(a) {
         ],
         [
           html.input([
-            class("w-[4ch] text-right col-start-1 col-span-1"),
+            class("w-[4ch] text-right text-lg col-start-1 col-span-1"),
             type_("number"),
             attribute.step("1"),
             attribute.name("new_exercise|reps|NN"),

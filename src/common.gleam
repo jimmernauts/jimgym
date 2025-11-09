@@ -54,7 +54,7 @@ pub const session_templates = [
       SetsExerciseTemplate("Pull-ups", 3, 8, 14.0),
       SetsExerciseTemplate("Rows", 3, 10, 25.0),
       SetsExerciseTemplate("Shoulder Press", 3, 8, 18.0),
-      SetsExerciseTemplate("ATG Squat", 3, 10, 0.0),
+      SetsExerciseTemplate("ATG Squat", 3, 10, -1.0),
     ],
   ),
   SessionTemplate(

@@ -146,7 +146,7 @@ input {
   }
 
   .grid-rows-auto {
-    grid-auto-rows: minmax(100px, max-content);
+    grid-auto-rows: minmax(30px, max-content);
   }
   input {
     & [type="number"] {
