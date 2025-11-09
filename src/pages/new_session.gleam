@@ -1,8 +1,10 @@
 import common.{session_templates}
-
 import gleam/int
 import gleam/list
 import gleam/result
+import lustre/attribute.{attribute, class, id, styles}
+import lustre/element.{type Element}
+import lustre/element/html.{text}
 import rada/date
 import sqlite_client
 import wisp.{type Request, type Response}
@@ -11,6 +13,13 @@ pub fn new_session(req: Request) -> Response {
   let template_name =
     wisp.get_query(req)
     |> list.key_find("template")
+  let session_date =
+    wisp.get_query(req)
+    |> list.key_find("date")
+    |> common.try_replacing_error(date.from_iso_string, fn(_) {
+      "Error parsing url params"
+    })
+    |> result.unwrap(date.today())
   let find_template_in_cache = fn(template_name: String) -> Result(
     common.SessionTemplate,
     Nil,
@@ -26,6 +35,9 @@ pub fn new_session(req: Request) -> Response {
   ) {
     sessions
     |> result.unwrap([])
+    |> list.sort(fn(session: common.GymSession, session2: common.GymSession) {
+      session.date |> date.compare(session2.date)
+    })
     |> list.find(fn(session: common.GymSession) {
       session.session_name == template.name
     })
@@ -50,7 +62,7 @@ pub fn new_session(req: Request) -> Response {
   ) {
     let new_session =
       common.GymSession(
-        date: date.today(),
+        date: session_date,
         session_name: matching_session.session_name,
         emoji: matching_session.emoji,
         exercises: matching_session.exercises,
@@ -62,11 +74,11 @@ pub fn new_session(req: Request) -> Response {
     case result {
       Ok(_) ->
         wisp.redirect(
-          date.today() |> date.year |> int.to_string
+          session_date |> date.year |> int.to_string
           <> "/"
-          <> date.today() |> date.month_number |> int.to_string
+          <> session_date |> date.month_number |> int.to_string
           <> "/"
-          <> date.today() |> date.day |> int.to_string,
+          <> session_date |> date.day |> int.to_string,
         )
       Error(_) -> wisp.internal_server_error()
     }

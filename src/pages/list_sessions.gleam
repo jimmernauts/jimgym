@@ -1,11 +1,11 @@
-import common
+import common.{session_templates}
 import gleam/float
 import gleam/int
 import gleam/list
 import gleam/result
-import lustre/attribute.{class, href, id}
+import lustre/attribute.{class, href, id, styles}
 import lustre/element.{type Element}
-import lustre/element/html.{a, article, div, h2, section, td, text, tr}
+import lustre/element/html.{a, article, button, div, h2, section, td, text, tr}
 import rada/date
 import wisp.{type Request}
 
@@ -159,17 +159,32 @@ pub fn view_calendar_day(
         },
       ])
     },
-    [
-      div([class("row-start-1 flex justify-center")], [
-        text(day |> date.day |> int.to_string),
-      ]),
-      div([class("row-start-2 flex justify-center")], [
-        case emoji {
-          "" -> element.none()
-          _ -> text(emoji)
-        },
-      ]),
-    ],
+    case emoji {
+      "" -> [
+        button(
+          [
+            attribute.popovertarget(
+              "new-session-template-picker-" <> day |> date.to_iso_string,
+            ),
+            attribute.style(
+              "anchor-name",
+              "--new-session-template-picker-" <> day |> date.to_iso_string,
+            ),
+            class("row-start-1 flex justify-center"),
+          ],
+          [
+            text(day |> date.day |> int.to_string),
+          ],
+        ),
+        new_session_mini_card(day),
+      ]
+      _ -> [
+        div([class("row-start-1 flex justify-center")], [
+          text(day |> date.day |> int.to_string),
+        ]),
+        div([class("row-start-2 flex justify-center")], [text(emoji)]),
+      ]
+    },
   )
 }
 
@@ -282,4 +297,40 @@ pub fn month_to_label(month: date.Month) -> String {
     date.Nov -> "Nov"
     date.Dec -> "Dec"
   }
+}
+
+fn new_session_mini_card(date: date.Date) -> Element(a) {
+  html.aside(
+    [
+      id("new-session-template-picker-" <> date |> date.to_iso_string),
+      attribute.popover("auto"),
+      class("rounded border border-uchu-yin bg-white p-2 absolute"),
+      styles([
+        #("inset", "auto"),
+        #(
+          "position-anchor",
+          "--new-session-template-picker-" <> date |> date.to_iso_string,
+        ),
+        #("position-area", "top"),
+      ]),
+    ],
+    session_templates |> list.map(new_session_template_button(_, date)),
+  )
+}
+
+fn new_session_template_button(
+  template: common.SessionTemplate,
+  date: date.Date,
+) -> Element(a) {
+  html.a(
+    [
+      attribute.href(
+        "/new?date="
+        <> date |> date.to_iso_string
+        <> "&template="
+        <> template.name,
+      ),
+    ],
+    [html.text(template.emoji)],
+  )
 }

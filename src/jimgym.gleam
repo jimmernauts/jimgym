@@ -51,6 +51,7 @@ pub fn handle_request(req: Request) -> Response {
     }
     Ok(model), Get, [], _ -> view(home(req, model), [])
     Ok(_), Get, ["new"], _ -> new_session(req)
+    Ok(_), Get, ["new", _], _ -> new_session(req)
     Ok(model), Get, [year, month], _ -> {
       let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
       let month =

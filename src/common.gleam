@@ -160,6 +160,25 @@ pub fn exercises_from_template(
   |> list.group(fn(exercise) { exercise.name })
 }
 
+/// Applies a function to a successful result, or maps the error using a provided function.
+///
+/// This is useful when you want to transform a result but need to handle both
+/// the success and error cases with different functions.
+///
+/// ## Examples
+/// ```gleam
+/// // Convert a string to an int, defaulting to 0 on error
+/// "42"
+/// |> int.parse
+/// |> try_replacing_error(fn(x) { Ok(x) }, fn(_) { 0 })
+/// // -> Ok(42)
+///
+/// "not a number"
+/// |> int.parse
+/// |> try_replacing_error(fn(x) { Ok(x) }, fn(_) { 0 })
+/// // -> Error(0)
+/// ```
+///
 pub fn try_replacing_error(
   result: Result(a, e),
   apply fun: fn(a) -> Result(b, f),
