@@ -6,7 +6,10 @@ dbmate up
 
 which aws  # Should output the path to the AWS CLI
 aws --version  # Should show the AWS CLI version
-
+echo "AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID"
+echo "AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY"
+echo "S3_BUCKET: $S3_BUCKET"
+echo "S3_ENDPOINT: $S3_ENDPOINT"
 
 # Database backup to S3-compatible storage (Tigris)
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ] && [ -n "$S3_BUCKET" ]; then
