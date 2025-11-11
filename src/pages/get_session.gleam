@@ -63,9 +63,7 @@ pub fn get_session(
 fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
   div(
     [
-      class(
-        "border-b text-2xl border-gray-100 col-span-full subgrid-cols gap-1 items-center",
-      ),
+      class("text-xl col-span-full subgrid-cols gap-1 items-baseline"),
       id(
         "exercise_"
         <> exercise.name |> string.replace(" ", "_")
@@ -103,7 +101,14 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
 }
 
 fn rep_input(name: String, reps: Int, index: Int) {
-  div([class("col-span-3 flex justify-evenly")], [
+  div([class("col-span-2 flex items-start justify-between gap-1")], [
+    html.input([
+      class("w-[2ch] text-right"),
+      type_("number"),
+      attribute.step("1"),
+      attribute.value(reps |> int.to_string),
+      attribute.name(name <> "|reps|" <> index |> int.to_string),
+    ]),
     div([class("flex flex-col text-sm gap-1")], [
       html.button(
         [
@@ -126,47 +131,46 @@ fn rep_input(name: String, reps: Int, index: Int) {
         [text("➖")],
       ),
     ]),
-    html.input([
-      class("w-[4ch] text-center"),
-      type_("number"),
-      attribute.step("1"),
-      attribute.value(reps |> int.to_string),
-      attribute.name(name <> "|reps|" <> index |> int.to_string),
-    ]),
   ])
 }
 
-//TODO: make vertical
 fn weight_input(name: String, weight: Float, index: Int) {
-  div([class("col-span-3 text-sm items-baseline flex justify-evenly")], [
-    html.button(
-      [
-        attribute(
-          "fx-action",
-          "decrement-weight/" <> name <> "/" <> index |> int.to_string,
-        ),
-        attribute("fx-swap", "none"),
-      ],
-      [text("➖")],
-    ),
-    html.input([
-      class("w-[3.5ch] text-right text-lg col-span-1 flex justify-start  "),
-      type_("number"),
-      attribute.step("0.5"),
-      attribute.value(weight |> common.float_to_intstring),
-      attribute.name(name <> "|weight|" <> index |> int.to_string),
+  div([class("col-span-3 flex justify-between gap-1")], [
+    div([class("items-baseline flex text-sm")], [
+      html.input([
+        class("w-[3.5ch] text-right text-xl"),
+        type_("number"),
+        attribute.step("0.5"),
+        attribute.value(weight |> common.float_to_intstring),
+        attribute.name(name <> "|weight|" <> index |> int.to_string),
+      ]),
+      case weight {
+        0.0 -> element.none()
+        _ -> html.text("kg")
+      },
     ]),
-    html.text("kg"),
-    html.button(
-      [
-        attribute(
-          "fx-action",
-          "increment-weight/" <> name <> "/" <> index |> int.to_string,
-        ),
-        attribute("fx-swap", "none"),
-      ],
-      [text("➕")],
-    ),
+    div([class("flex flex-col text-sm gap-1")], [
+      html.button(
+        [
+          attribute(
+            "fx-action",
+            "increment-weight/" <> name <> "/" <> index |> int.to_string,
+          ),
+          attribute("fx-swap", "none"),
+        ],
+        [text("➕")],
+      ),
+      html.button(
+        [
+          attribute(
+            "fx-action",
+            "decrement-weight/" <> name <> "/" <> index |> int.to_string,
+          ),
+          attribute("fx-swap", "none"),
+        ],
+        [text("➖")],
+      ),
+    ]),
   ])
 }
 
@@ -180,10 +184,13 @@ fn name_input(name: String, index: Int) {
 }
 
 fn exercise_row_buttons(exercise: common.Exercise, index: Int) {
-  div([class("col-start-12 flex flex-col text-sm gap-1")], [
+  div([class("col-start-12 flex flex-col self-end text-sm gap-1")], [
     html.button(
       [
-        attribute("fx-action", "delete"),
+        attribute(
+          "fx-action",
+          "delete/" <> exercise.name <> "/" <> index |> int.to_string,
+        ),
         attribute("fx-swap", "outerHTML"),
       ],
       [text("❌")],
@@ -194,7 +201,7 @@ fn exercise_row_buttons(exercise: common.Exercise, index: Int) {
           "fx-action",
           "clone/" <> exercise.name <> "/" <> index |> int.to_string,
         ),
-        attribute("fx-swap", "outerHTML"),
+        attribute("fx-swap", "afterend"),
       ],
       [text("📚")],
     ),

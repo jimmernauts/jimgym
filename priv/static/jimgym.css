@@ -333,6 +333,9 @@
   .h-full {
     height: 100%;
   }
+  .w-\[2ch\] {
+    width: 2ch;
+  }
   .w-\[3\.5ch\] {
     width: 3.5ch;
   }
@@ -381,6 +384,9 @@
   .items-center {
     align-items: center;
   }
+  .items-start {
+    align-items: flex-start;
+  }
   .justify-around {
     justify-content: space-around;
   }
@@ -389,6 +395,9 @@
   }
   .justify-center {
     justify-content: center;
+  }
+  .justify-end {
+    justify-content: flex-end;
   }
   .justify-evenly {
     justify-content: space-evenly;
@@ -419,6 +428,9 @@
   }
   .self-center {
     align-self: center;
+  }
+  .self-end {
+    align-self: flex-end;
   }
   .justify-self-center {
     justify-self: center;
