@@ -3,6 +3,7 @@ import gleam/dict
 import gleam/float
 import gleam/int
 import gleam/list
+import gleam/string
 import lustre/attribute.{attribute, class, href, id, name, type_}
 import lustre/element.{type Element}
 import lustre/element/html.{
@@ -44,57 +45,48 @@ pub fn get_session(
     form(
       [
         class(
-          "row-start-[content] overflow-y-scroll gap-1 gap-y-2 grid col-[main-start_/_main-end] grid-cols-12 grid-rows-auto w-full text-sm",
+          "row-start-[content] overflow-y-scroll gap-1 gap-y-3 grid col-[main-start_/_main-end] grid-cols-12 grid-rows-auto w-full text-sm",
         ),
         id("session-form"),
       ],
       session.exercises
         |> dict.to_list
         |> list.map(fn(group) { group.1 |> list.index_map(view_exercise_input) })
-        |> list.flatten
-        |> common.list_append_one(exercise_input_template()),
+        |> list.flatten,
     ),
+    exercise_input_template(),
   ]
 }
 
 //---VIEW HELPERS--------------------------------------------------
 
 fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
-  case exercise {
-    common.SetsExercise(name, reps, weight) ->
-      div(
-        [
-          class(
-            "border-b text-lg py-2 border-gray-100 col-span-full subgrid-cols gap-1 items-baseline",
-          ),
-        ],
-        [
-          rep_input(name, reps, index),
+  div(
+    [
+      class(
+        "border-b text-2xl border-gray-100 col-span-full subgrid-cols gap-1 items-center",
+      ),
+      id(
+        "exercise_"
+        <> exercise.name |> string.replace(" ", "_")
+        <> "_"
+        <> index |> int.to_string,
+      ),
+    ],
+    case exercise {
+      common.SetsExercise(name, reps, weight) -> [
+        rep_input(name, reps, index),
+        name_input(name, index),
+        case weight {
+          -1.0 -> element.none()
+          _ -> weight_input(name, weight, index)
+        },
+        exercise_row_buttons(exercise, index),
+      ]
+      common.TimedExercise(name, duration) -> [
+        div([class("col-span-3 flex justify-center gap-1")], [
           html.input([
-            class("col-start-4 col-span-5 text-left field-sizing-content"),
-            type_("text"),
-            attribute.value(name),
-            attribute.name(exercise.name <> "|name|" <> index |> int.to_string),
-          ]),
-          case weight {
-            -1.0 -> element.none()
-            _ -> weight_input(name, weight, index)
-          },
-          html.button(
-            [
-              class("col-start-12 text-sm"),
-              attribute("fx-action", "delete"),
-              attribute("fx-swap", "outerHTML"),
-            ],
-            [text("❌")],
-          ),
-        ],
-      )
-    common.TimedExercise(name, duration) ->
-      html.fieldset([class("border-b border-gray-100")], [
-        div([class("py-1 text-center")], [
-          html.input([
-            class(""),
+            class("text-right"),
             type_("number"),
             attribute.name(
               exercise.name <> "|duration|" <> index |> int.to_string,
@@ -103,56 +95,48 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
           ]),
           text("m"),
         ]),
-        html.input([
-          class("col-start-2 col-span-6 text-left flex justify-start"),
-          type_("text"),
-          attribute.value(name),
-          attribute.name(exercise.name <> "|name|" <> index |> int.to_string),
-        ]),
-        html.button(
-          [
-            class("col-start-12 text-base"),
-            attribute("fx-action", "delete"),
-            attribute("fx-swap", "outerHTML"),
-          ],
-          [text("❌")],
-        ),
-      ])
-  }
+        name_input(name, index),
+        exercise_row_buttons(exercise, index),
+      ]
+    },
+  )
 }
 
 fn rep_input(name: String, reps: Int, index: Int) {
-  div([class("col-span-3 text-sm items-baseline flex justify-evenly")], [
-    html.button(
-      [
-        attribute(
-          "fx-action",
-          "decrement-reps/" <> name <> "/" <> index |> int.to_string,
-        ),
-        attribute("fx-swap", "none"),
-      ],
-      [text("➖")],
-    ),
+  div([class("col-span-3 flex justify-evenly")], [
+    div([class("flex flex-col text-sm gap-1")], [
+      html.button(
+        [
+          attribute(
+            "fx-action",
+            "increment-reps/" <> name <> "/" <> index |> int.to_string,
+          ),
+          attribute("fx-swap", "none"),
+        ],
+        [text("➕")],
+      ),
+      html.button(
+        [
+          attribute(
+            "fx-action",
+            "decrement-reps/" <> name <> "/" <> index |> int.to_string,
+          ),
+          attribute("fx-swap", "none"),
+        ],
+        [text("➖")],
+      ),
+    ]),
     html.input([
-      class("w-[4ch] text-lg text-center"),
+      class("w-[4ch] text-center"),
       type_("number"),
       attribute.step("1"),
       attribute.value(reps |> int.to_string),
       attribute.name(name <> "|reps|" <> index |> int.to_string),
     ]),
-    html.button(
-      [
-        attribute(
-          "fx-action",
-          "increment-reps/" <> name <> "/" <> index |> int.to_string,
-        ),
-        attribute("fx-swap", "none"),
-      ],
-      [text("➕")],
-    ),
   ])
 }
 
+//TODO: make vertical
 fn weight_input(name: String, weight: Float, index: Int) {
   div([class("col-span-3 text-sm items-baseline flex justify-evenly")], [
     html.button(
@@ -186,81 +170,46 @@ fn weight_input(name: String, weight: Float, index: Int) {
   ])
 }
 
-//TODO: this is the default template we get when we insert a new exercise. 
-// it needs updating to match the structure of view_exercise_input function above
+fn name_input(name: String, index: Int) {
+  html.input([
+    class("col-start-4 col-span-5 text-left field-sizing-content"),
+    type_("text"),
+    attribute.value(name),
+    attribute.name(name <> "|name|" <> index |> int.to_string),
+  ])
+}
+
+fn exercise_row_buttons(exercise: common.Exercise, index: Int) {
+  div([class("col-start-12 flex flex-col text-sm gap-1")], [
+    html.button(
+      [
+        attribute("fx-action", "delete"),
+        attribute("fx-swap", "outerHTML"),
+      ],
+      [text("❌")],
+    ),
+    html.button(
+      [
+        attribute(
+          "fx-action",
+          "clone/" <> exercise.name <> "/" <> index |> int.to_string,
+        ),
+        attribute("fx-swap", "outerHTML"),
+      ],
+      [text("📚")],
+    ),
+  ])
+}
+
+//this is the default template we get when we insert a new exercise. 
+//it uses an index of 99 which gets replaced by the fixi extension when it is swapped in.
 fn exercise_input_template() -> Element(a) {
   element.fragment([
     html.template([id("/new-sets-exercise-input")], [
-      div(
-        [
-          class(
-            "border-b border-gray-100 col-span-6 subgrid-cols gap-1 items-baseline",
-          ),
-        ],
-        [
-          html.input([
-            class("w-[4ch] text-right text-lg col-start-1 col-span-1"),
-            type_("number"),
-            attribute.step("1"),
-            attribute.name("new_exercise|reps|NN"),
-          ]),
-          html.input([
-            class("col-start-2 col-span-2 text-left flex justify-start"),
-            type_("text"),
-            attribute.name("new_exercise|name|NN"),
-          ]),
-          html.input([
-            class(
-              "w-[3.5ch] col-start-4 text-left col-span-1 flex justify-start  ",
-            ),
-            type_("number"),
-            attribute.step("0.5"),
-            attribute.name("new_exercise|weight|NN"),
-          ]),
-          text(" kg"),
-          html.button(
-            [
-              class("col-start-6"),
-              attribute("fx-action", "delete"),
-              attribute("fx-swap", "outerHTML"),
-            ],
-            [text("❌")],
-          ),
-        ],
-      ),
+      view_exercise_input(common.SetsExercise("New Exercise", 0, 0.0), -99),
     ]),
     html.template([id("/new-timed-exercise-input")], [
-      div(
-        [
-          class(
-            "border-b border-gray-100 col-span-6 subgrid-cols gap-1 items-baseline",
-          ),
-        ],
-        [
-          html.input([
-            class("col-start-2 col-span-2 text-left flex justify-start"),
-            type_("text"),
-            attribute.name("new_exercise|name|NN"),
-          ]),
-          html.input([
-            class(
-              "w-[3.5ch] col-start-4 text-left col-span-1 flex justify-start  ",
-            ),
-            type_("number"),
-            attribute.step("1"),
-            attribute.name("new_exercise|duration|NN"),
-          ]),
-          text("m"),
-          html.button(
-            [
-              class("col-start-6"),
-              attribute("fx-action", "delete"),
-              attribute("fx-swap", "outerHTML"),
-            ],
-            [text("❌")],
-          ),
-        ],
-      ),
+      view_exercise_input(common.TimedExercise("New Exercise", 0), -99),
     ]),
   ])
 }
