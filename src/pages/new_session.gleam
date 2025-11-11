@@ -38,6 +38,7 @@ pub fn new_session(req: Request) -> Response {
     |> list.sort(fn(session: common.GymSession, session2: common.GymSession) {
       session.date |> date.compare(session2.date)
     })
+    |> list.reverse
     |> list.find(fn(session: common.GymSession) {
       session.session_name == template.name
     })
