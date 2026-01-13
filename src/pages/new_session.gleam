@@ -1,4 +1,4 @@
-import common.{session_templates}
+import common
 import gleam/int
 import gleam/list
 import gleam/result
@@ -20,6 +20,8 @@ pub fn new_session(req: Request) -> Response {
       "Error parsing url params"
     })
     |> result.unwrap(date.today())
+  let session_templates =
+    sqlite_client.get_all_session_templates() |> result.unwrap([])
   let find_template_in_cache = fn(template_name: String) -> Result(
     common.SessionTemplate,
     Nil,

@@ -1,9 +1,10 @@
-import common.{SetsExerciseTemplate, TimedExerciseTemplate, session_templates}
+import common.{SetsExerciseTemplate, TimedExerciseTemplate}
 import gleam/erlang/process
 import gleam/float
 import gleam/http.{Get, Post}
 import gleam/int
 import gleam/list
+import gleam/option
 import gleam/result
 import lustre/attribute.{
   attribute, charset, class, content, href, id, name, rel, style, styles, type_,
@@ -17,6 +18,7 @@ import mist
 import pages/get_session.{get_session, get_session_mini}
 import pages/list_sessions.{list_sessions}
 import pages/new_session.{new_session}
+import pages/setup
 import pages/update_session.{update_session}
 import rada/date
 import sqlite_client
@@ -49,7 +51,17 @@ pub fn handle_request(req: Request) -> Response {
       echo err
       wisp.not_found()
     }
-    Ok(model), Get, [], _ -> view(home(req, model), [])
+    Ok(model), Get, [], _ -> {
+      let templates =
+        sqlite_client.get_all_session_templates() |> result.unwrap([])
+      view(home(req, model, templates), [])
+    }
+    Ok(_), Get, ["setup"], _ -> {
+      case sqlite_client.get_all_session_templates() {
+        Ok(templates) -> view(setup.setup_page(req, templates), [])
+        Error(_) -> wisp.internal_server_error()
+      }
+    }
     Ok(_), Get, ["new"], _ -> new_session(req)
     Ok(_), Get, ["new", _], _ -> new_session(req)
     Ok(model), Get, [year, month], _ -> {
@@ -93,6 +105,82 @@ pub fn handle_request(req: Request) -> Response {
       })
       |> result.unwrap(wisp.not_found())
     }
+    // Setup POST routes - specific 3-segment routes MUST come before wildcard [year, month, day]
+    Ok(_), Post, ["setup", "exercise", "add"], _ -> {
+      use formdata <- wisp.require_form(req)
+      let template_name =
+        formdata.values
+        |> list.key_find("template_name")
+        |> result.unwrap("")
+      let exercise_name =
+        formdata.values
+        |> list.key_find("exercise_name")
+        |> result.unwrap("")
+      let exercise_type =
+        formdata.values
+        |> list.key_find("exercise_type")
+        |> result.unwrap("sets")
+      let sets =
+        formdata.values
+        |> list.key_find("sets")
+        |> result.try(int.parse)
+        |> option.from_result
+      let reps =
+        formdata.values
+        |> list.key_find("reps")
+        |> result.try(int.parse)
+        |> option.from_result
+      let weight =
+        formdata.values
+        |> list.key_find("weight")
+        |> result.try(float.parse)
+        |> option.from_result
+      let duration =
+        formdata.values
+        |> list.key_find("duration")
+        |> result.try(int.parse)
+        |> option.from_result
+      case template_name, exercise_name {
+        "", _ | _, "" -> wisp.bad_request()
+        tmpl, ex -> {
+          case
+            sqlite_client.add_exercise_to_template(
+              tmpl,
+              ex,
+              exercise_type,
+              sets,
+              reps,
+              weight,
+              duration,
+            )
+          {
+            Ok(_) -> wisp.redirect("/setup")
+            Error(_) -> wisp.internal_server_error()
+          }
+        }
+      }
+    }
+    Ok(_), Post, ["setup", "exercise", "delete"], _ -> {
+      use formdata <- wisp.require_form(req)
+      let template_name =
+        formdata.values
+        |> list.key_find("template_name")
+        |> result.unwrap("")
+      let exercise_name =
+        formdata.values
+        |> list.key_find("exercise_name")
+        |> result.unwrap("")
+      case template_name, exercise_name {
+        "", _ | _, "" -> wisp.bad_request()
+        tmpl, ex -> {
+          case sqlite_client.delete_exercise_from_template(tmpl, ex) {
+            Ok(_) -> wisp.redirect("/setup")
+            Error(_) -> wisp.internal_server_error()
+          }
+        }
+      }
+    }
+    // Date-based POST route (wildcard - must come after specific routes)
     Ok(_), Post, [year, month, day], _ -> {
       let year = year |> int.parse |> result.unwrap(date.today() |> date.year)
       let month =
@@ -102,6 +190,67 @@ pub fn handle_request(req: Request) -> Response {
         |> date.number_to_month
       let day = day |> int.parse |> result.unwrap(date.today() |> date.day)
       update_session(req, date.from_calendar_date(year, month, day))
+    }
+    // Setup 2-segment POST routes
+    Ok(_), Post, ["setup", "delete"], _ -> {
+      use formdata <- wisp.require_form(req)
+      let template_name =
+        formdata.values
+        |> list.key_find("template_name")
+        |> result.unwrap("")
+      case template_name {
+        "" -> wisp.bad_request()
+        name -> {
+          case sqlite_client.delete_session_template(name) {
+            Ok(_) -> wisp.redirect("/setup")
+            Error(_) -> wisp.internal_server_error()
+          }
+        }
+      }
+    }
+    Ok(_), Post, ["setup", "create"], _ -> {
+      use formdata <- wisp.require_form(req)
+      let template_name =
+        formdata.values
+        |> list.key_find("template_name")
+        |> result.unwrap("")
+      let emoji =
+        formdata.values
+        |> list.key_find("emoji")
+        |> result.unwrap("💪")
+      case template_name {
+        "" -> wisp.bad_request()
+        name -> {
+          case sqlite_client.create_session_template(name, emoji) {
+            Ok(_) -> wisp.redirect("/setup")
+            Error(_) -> wisp.internal_server_error()
+          }
+        }
+      }
+    }
+    Ok(_), Post, ["setup", "update"], _ -> {
+      use formdata <- wisp.require_form(req)
+      let old_name =
+        formdata.values
+        |> list.key_find("old_name")
+        |> result.unwrap("")
+      let new_name =
+        formdata.values
+        |> list.key_find("new_name")
+        |> result.unwrap("")
+      let emoji =
+        formdata.values
+        |> list.key_find("emoji")
+        |> result.unwrap("💪")
+      case old_name, new_name {
+        "", _ | _, "" -> wisp.bad_request()
+        old, new -> {
+          case sqlite_client.update_session_template(old, new, emoji) {
+            Ok(_) -> wisp.redirect("/setup")
+            Error(_) -> wisp.internal_server_error()
+          }
+        }
+      }
     }
     _, _, _, _ -> wisp.not_found()
   }
@@ -145,7 +294,11 @@ pub fn view(body: List(Element(a)), nav_elements: List(Element(a))) -> Response 
   |> wisp.html_response(200)
 }
 
-pub fn home(_req: Request, model: List(common.GymSession)) -> List(Element(a)) {
+pub fn home(
+  _req: Request,
+  model: List(common.GymSession),
+  session_templates: List(common.SessionTemplate),
+) -> List(Element(a)) {
   let sessions = model
   [
     h1(
@@ -213,6 +366,18 @@ pub fn home(_req: Request, model: List(common.GymSession)) -> List(Element(a)) {
           [
             h1([class("font-bold text-3xl")], [text("🕵️ ")]),
             h1([class("font-bold text-3xl")], [text("Review")]),
+          ],
+        ),
+        a(
+          [
+            class(
+              "bg-uchu-light-gray border-2 border-uchu-yin rounded-md overflow-hidden col-span-6 p-3 cursor-pointer flex gap-2 justify-start items-center",
+            ),
+            attribute.href("/setup"),
+          ],
+          [
+            h1([class("font-bold text-3xl")], [text("⚙️ ")]),
+            h1([class("font-bold text-3xl")], [text("Setup sessions")]),
           ],
         ),
       ],

@@ -5,5 +5,5 @@ erl_crash.dump
 node_modules
 bun.lock
 dist
-data
+# data
 **/remote_data

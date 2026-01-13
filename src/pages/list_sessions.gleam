@@ -1,4 +1,4 @@
-import common.{session_templates}
+import common
 import gleam/float
 import gleam/int
 import gleam/list
@@ -7,6 +7,7 @@ import lustre/attribute.{class, href, id, styles}
 import lustre/element.{type Element}
 import lustre/element/html.{a, article, button, div, h2, section, td, text, tr}
 import rada/date
+import sqlite_client
 import wisp.{type Request}
 
 pub fn list_sessions(
@@ -300,6 +301,8 @@ pub fn month_to_label(month: date.Month) -> String {
 }
 
 fn new_session_mini_card(date: date.Date) -> Element(a) {
+  let session_templates =
+    sqlite_client.get_all_session_templates() |> result.unwrap([])
   html.aside(
     [
       id("new-session-template-picker-" <> date |> date.to_iso_string),
