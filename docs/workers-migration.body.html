@@ -1,0 +1,31 @@
+<header class="doc-header">
+  <h1 data-k="title">Move jimgym to Cloudflare Workers</h1>
+  <p data-k="goal">Open jimgym on a phone over HTTPS and sign in through Cloudflare Access. Keep the current workout screens and history. No VPN, browser database, or offline sync.</p>
+</header>
+<section>
+  <h2 data-k="design-title">Target setup</h2>
+  <p data-k="design">Cloudflare Access admits only the owner. A Cloudflare Worker serves the existing Gleam/Lustre views and static files, and reads and writes a dedicated jimgym Turso database. Database credentials stay in Worker secrets. Reuse Mealstack’s hosting and sign-in pattern, not its browser database.[^1]</p>
+  <p data-k="boundaries">Start from the deployed Fly code line, not the unpublished VPN commits. Do not push to the Fly deployment branch or open a public Worker route during the prototype.</p>
+</section>
+<section>
+  <h2 data-k="phases">Implementation and checks</h2>
+  <ol class="steps">
+    <li><strong class="step-title" data-k="read-title">Read one workout</strong><p data-k="read">Render one workout with the existing history view. Test the Worker with synthetic data. Then use a separate staging database and an owner-only staging hostname. Check that an unsigned browser and a signed-in account outside the policy cannot read any workout, and that the owner can open a workout on a phone. Disable alternate hostnames and preview URLs unless they have the same protection.</p></li>
+    <li><strong class="step-title" data-k="port-title">Port the remaining routes</strong><p data-k="port">Keep URLs, HTML and fixi interactions for the calendar, new and edited workouts, and template setup. Validate write requests on the server. Save a session and its sets in one database transaction so a failed save cannot erase or partly replace sets. Test the complete workout and template flows, including failed saves and an unauthorized write.[^2]</p></li>
+    <li><strong class="step-title" data-k="rehearse-title">Rehearse the data move</strong><p data-k="rehearse">Take a consistent SQLite backup from the Fly volume, not the copy in Git. Import it into an empty Turso staging database without adding seed data. Compare counts and ordered row checksums for sessions, exercise records and both template tables. Check foreign keys, primary keys and date ranges. Verify that a new save takes the correct IDs. Test restoring a backup before relying on it.[^3]</p></li>
+    <li><strong class="step-title" data-k="cutover-title">Switch production in a maintenance window</strong><p data-k="cutover">Stop Fly writes and block public access to the old app. Take a final snapshot and repeat the checked import into the production database. With writes still off, confirm the history matches, verify the Access policy on every hostname, and open the new URL on the owner’s phone. Then enable writes and verify a save. Keep the Fly volume and final snapshot until the owner confirms the new service.</p></li>
+  </ol>
+</section>
+<section>
+  <h2 data-k="rollback-title">Rollback and backups</h2>
+  <p data-k="rollback">Before the new app accepts writes, switch back to the final Fly snapshot only after protecting the old app against unauthorized access. If that protection is not ready, keep the app offline. After the Worker accepts writes, freeze writes and export Turso first. Reconcile and verify the new records before resuming on Fly. Never reopen a stale Fly database for writes.</p>
+  <p data-k="backups">Confirm what recovery the Turso plan provides and keep a tested export outside the database. Remove Fly and Tigris only after the owner accepts the new app and the restore check passes. Rotate any live backup credentials previously committed to Git; do not reuse them for the Worker.</p>
+</section>
+<section>
+  <h2 data-k="sources">Sources</h2>
+  <ol class="sources">
+    <li data-k="source-access">[Mealstack architecture](https://github.com/jimmernauts/gleamstack/blob/main/README.md#architecture) and [Cloudflare Access for Workers](https://developers.cloudflare.com/workers/configuration/cloudflare-access/).</li>
+    <li data-k="source-saves">[jimgym routes](https://github.com/jimmernauts/jimgym/blob/0adf4fe165fe68e5dd24d671b7654c3d435f41bc/src/jimgym.gleam) and [current SQLite writes](https://github.com/jimmernauts/jimgym/blob/0adf4fe165fe68e5dd24d671b7654c3d435f41bc/src/sqlite_client.gleam).</li>
+    <li data-k="source-schema">[jimgym SQLite schema](https://github.com/jimmernauts/jimgym/blob/0adf4fe165fe68e5dd24d671b7654c3d435f41bc/schema/schema.sql).</li>
+  </ol>
+</section>
