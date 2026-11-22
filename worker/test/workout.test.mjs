@@ -80,3 +80,39 @@ test("rejects invalid routes and reports an unavailable database without leaking
   expect(response.status).toBe(502);
   expect(await response.text()).toBe("Workout history unavailable");
 });
+
+test("creates and renames a template, adds and removes exercises, then deletes the template", async () => {
+  const original = { template_name: "New & strong", emoji: "🧗" };
+  const create = await post("/setup/create", original);
+  expect(create.status).toBe(303);
+  expect(create.headers.get("Location")).toBe("/setup");
+  expect((await post("/setup/create", original)).status).toBe(409);
+  expect((await post("/setup/update", { old_name: original.template_name, new_name: "Strength & Cardio", emoji: "🧗" })).status).toBe(409);
+  const template = { template_name: "Renamed template" };
+  expect((await post("/setup/update", { old_name: original.template_name, new_name: template.template_name, emoji: "🧗" })).status).toBe(303);
+  const lift = { ...template, exercise_name: "Rows", exercise_type: "sets", sets: "2", reps: "8", weight: "12.5" };
+  const timed = { ...template, exercise_name: "Jog", exercise_type: "timed", duration: "18" };
+  expect((await post("/setup/exercise/add", lift)).status).toBe(303);
+  expect((await post("/setup/exercise/add", timed)).status).toBe(303);
+  let page = await (await fetchPage("/setup")).text();
+  expect(page).toContain("Renamed template");
+  expect(page.indexOf("Rows")).toBeLessThan(page.indexOf("Jog"));
+  expect((await post("/setup/exercise/delete", lift)).status).toBe(303);
+  page = await (await fetchPage("/setup")).text();
+  expect(page).not.toContain("Rows");
+  expect(page).toContain("Jog");
+  expect((await post("/setup/delete", template)).status).toBe(303);
+  page = await (await fetchPage("/setup")).text();
+  expect(page).not.toContain("Renamed template");
+  expect(page).not.toContain("Jog");
+  expect((await post("/setup/delete", template)).status).toBe(404);
+});
+
+test("rejects cross-origin and invalid template changes", async () => {
+  const template = { template_name: "Strength & Cardio" };
+  expect((await post("/setup/delete", template, "https://other.example")).status).toBe(403);
+  expect((await post("/setup/create", { template_name: " " })).status).toBe(400);
+  expect((await post("/setup/exercise/add", { ...template, exercise_name: "Invalid", exercise_type: "sets", sets: "9999999" })).status).toBe(400);
+  expect((await post("/setup/exercise/add", { ...template, exercise_name: "Invalid", exercise_type: "other" })).status).toBe(400);
+  expect(await (await fetchPage("/setup")).text()).toContain("Strength &amp; Cardio");
+});

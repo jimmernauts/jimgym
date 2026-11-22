@@ -42,7 +42,7 @@ pub fn render_page(
       )
     "setup", _ ->
       Ok(
-        workout_pages.view(setup.setup_page(templates, False), [])
+        workout_pages.view(setup.setup_page(templates), [])
         |> string_tree.to_string,
       )
     "preview", [session] ->

@@ -1,6 +1,7 @@
 import { connect } from "@tursodatabase/serverless";
 import { render_page, new_workout } from "../build/dev/javascript/jimgym_worker/jimgym_worker.mjs";
 import { getTemplates, getWorkout, saveWorkout, parseWorkout } from "./workouts.mjs";
+import { isTemplateAction, parseTemplateAction, changeTemplate } from "./templates.mjs";
 
 function respond(body, status, type = "text/plain") {
   return new Response(body, {
@@ -35,8 +36,9 @@ export default {
     const month = Number(monthMatch?.[2]);
     const calendar = year > 0 && month >= 1 && month <= 12;
     const starting = /^\/new(?:\/[^/]+)?$/.test(pathname);
+    const templateAction = isTemplateAction(pathname);
     if (request.method === "POST") {
-      if (!day) return notFound();
+      if (!day && !templateAction) return notFound();
       if (request.headers.get("Origin") !== url.origin) return respond("Forbidden", 403);
     } else if (request.method !== "GET" || !(day || calendar || starting || pathname === "/" || pathname === "/setup")) {
       return notFound();
@@ -45,6 +47,14 @@ export default {
     try {
       const db = connect({ url: env.TURSO_URL, authToken: env.TURSO_AUTH_TOKEN, defaultQueryTimeout: 10000 });
       if (request.method === "POST") {
+        if (templateAction) {
+          let args;
+          try { args = parseTemplateAction(pathname, await request.formData()); } catch { return respond("Invalid template form. No changes were saved.", 400); }
+          const status = await changeTemplate(db, pathname, args);
+          if (status === 303) return redirect("/setup");
+          if (status === 409) return respond("A template with that name already exists.", 409);
+          return notFound();
+        }
         let workout;
         try { workout = parseWorkout(await request.formData()); } catch { return respond("Invalid workout form. No changes were saved.", 400); }
         if (!await saveWorkout(db, day, workout, url.searchParams.has("new"))) {

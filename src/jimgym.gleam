@@ -52,7 +52,7 @@ pub fn handle_request(req: Request) -> Response {
     Ok(_), Get, ["setup"], _ -> {
       case sqlite_client.get_all_session_templates() {
         Ok(templates) ->
-          workout_pages.view(setup.setup_page(templates, True), [])
+          workout_pages.view(setup.setup_page(templates), [])
           |> wisp.html_response(200)
         Error(_) -> wisp.internal_server_error()
       }
