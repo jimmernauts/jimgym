@@ -3,18 +3,17 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/result
+import gleam/uri
 import lustre/attribute.{class, href, id, styles}
 import lustre/element.{type Element}
 import lustre/element/html.{a, article, button, div, h2, section, td, text, tr}
 import rada/date
-import sqlite_client
-import wisp.{type Request}
 
 pub fn list_sessions(
-  _req: Request,
   model: List(common.GymSession),
   year: Int,
   month: Int,
+  templates: List(common.SessionTemplate),
 ) -> List(Element(a)) {
   [
     div(
@@ -41,7 +40,7 @@ pub fn list_sessions(
         ),
       ],
       list.flatten([
-        generate_calendar(month |> date.number_to_month, year, model)
+        generate_calendar(month |> date.number_to_month, year, model, templates)
         |> common.list_append_one(
           div([class("hidden"), id("mini_details")], []),
         )
@@ -127,6 +126,7 @@ pub fn view_calendar_day(
   day: date.Date,
   starting_column: String,
   emoji: String,
+  templates: List(common.SessionTemplate),
 ) -> Element(a) {
   article(
     {
@@ -177,7 +177,7 @@ pub fn view_calendar_day(
             text(day |> date.day |> int.to_string),
           ],
         ),
-        new_session_mini_card(day),
+        new_session_mini_card(day, templates),
       ]
       _ -> [
         div([class("row-start-1 flex justify-center")], [
@@ -213,6 +213,7 @@ pub fn generate_calendar(
   month: date.Month,
   year: Int,
   sessions: List(common.GymSession),
+  templates: List(common.SessionTemplate),
 ) -> List(Element(a)) {
   list.flatten([
     ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -221,7 +222,7 @@ pub fn generate_calendar(
           text(day),
         ])
       }),
-    generate_calendar_tiles(month, year, sessions),
+    generate_calendar_tiles(month, year, sessions, templates),
   ])
 }
 
@@ -229,6 +230,7 @@ pub fn generate_calendar_tiles(
   month: date.Month,
   year: Int,
   sessions: List(common.GymSession),
+  templates: List(common.SessionTemplate),
 ) -> List(Element(a)) {
   let days = generate_days_in_month(month, year)
   case days {
@@ -265,6 +267,7 @@ pub fn generate_calendar_tiles(
               list.find(sessions, fn(session) { session.date == first })
                 |> result.map(fn(session) { session.emoji })
                 |> result.unwrap(""),
+              templates,
             )
           },
         ],
@@ -276,6 +279,7 @@ pub fn generate_calendar_tiles(
               list.find(sessions, fn(session) { session.date == day })
                 |> result.map(fn(session) { session.emoji })
                 |> result.unwrap(""),
+              templates,
             )
           }),
       ])
@@ -300,9 +304,10 @@ pub fn month_to_label(month: date.Month) -> String {
   }
 }
 
-fn new_session_mini_card(date: date.Date) -> Element(a) {
-  let session_templates =
-    sqlite_client.get_all_session_templates() |> result.unwrap([])
+fn new_session_mini_card(
+  date: date.Date,
+  session_templates: List(common.SessionTemplate),
+) -> Element(a) {
   html.aside(
     [
       id("new-session-template-picker-" <> date |> date.to_iso_string),
@@ -331,7 +336,7 @@ fn new_session_template_button(
         "/new?date="
         <> date |> date.to_iso_string
         <> "&template="
-        <> template.name,
+        <> uri.percent_encode(template.name),
       ),
     ],
     [html.text(template.emoji)],

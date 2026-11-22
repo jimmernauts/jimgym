@@ -7,12 +7,11 @@ import lustre/attribute.{attribute, class, href, id, name, type_}
 import lustre/element.{type Element}
 import lustre/element/html.{a, div, form, h1, section, text}
 import rada/date
-import wisp.{type Request}
 import workout_history
 
 pub fn get_session(
-  _req: Request,
   session: common.GymSession,
+  action: String,
 ) -> List(Element(a)) {
   [
     h1(
@@ -20,11 +19,14 @@ pub fn get_session(
         class(
           "font-slab items-center text-4xl font-bold col-[main-start_/_main-end] row-start-[header] flex flex-row gap-2",
         ),
+        attribute.style("min-width", "0"),
       ],
       [
         html.input([
           attribute.form("session-form"),
           class("text-4xl"),
+          attribute.style("flex", "0 0 4rem"),
+          attribute.style("width", "4rem"),
           id("session_emoji"),
           name("session_emoji"),
           type_("text"),
@@ -32,7 +34,8 @@ pub fn get_session(
         ]),
         html.input([
           attribute.form("session-form"),
-          class("text-4xl"),
+          class("text-4xl flex-1"),
+          attribute.style("min-width", "0"),
           id("session_name"),
           name("session_name"),
           type_("text"),
@@ -46,6 +49,7 @@ pub fn get_session(
           "row-start-[content] overflow-y-scroll gap-1 gap-y-3 grid col-[main-start_/_main-end] grid-cols-12 grid-rows-auto w-full text-sm",
         ),
         id("session-form"),
+        attribute.action(action),
       ],
       session.exercises
         |> dict.to_list
@@ -74,7 +78,12 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
         rep_input(name, reps, index),
         name_input(name, index),
         case weight {
-          -1.0 -> element.none()
+          -1.0 ->
+            html.input([
+              type_("hidden"),
+              attribute.name(name <> "|weight|" <> int.to_string(index)),
+              attribute.value("-1"),
+            ])
           _ -> weight_input(name, weight, index)
         },
         exercise_row_buttons(exercise, index),
@@ -110,6 +119,7 @@ fn rep_input(name: String, reps: Int, index: Int) {
     div([class("flex flex-col text-sm gap-1")], [
       html.button(
         [
+          type_("button"),
           attribute(
             "fx-action",
             "increment-reps/" <> name <> "/" <> index |> int.to_string,
@@ -120,6 +130,7 @@ fn rep_input(name: String, reps: Int, index: Int) {
       ),
       html.button(
         [
+          type_("button"),
           attribute(
             "fx-action",
             "decrement-reps/" <> name <> "/" <> index |> int.to_string,
@@ -150,6 +161,7 @@ fn weight_input(name: String, weight: Float, index: Int) {
     div([class("flex flex-col text-sm gap-1")], [
       html.button(
         [
+          type_("button"),
           attribute(
             "fx-action",
             "increment-weight/" <> name <> "/" <> index |> int.to_string,
@@ -160,6 +172,7 @@ fn weight_input(name: String, weight: Float, index: Int) {
       ),
       html.button(
         [
+          type_("button"),
           attribute(
             "fx-action",
             "decrement-weight/" <> name <> "/" <> index |> int.to_string,
@@ -185,6 +198,7 @@ fn exercise_row_buttons(exercise: common.Exercise, index: Int) {
   div([class("col-start-12 flex flex-col self-end text-sm gap-1")], [
     html.button(
       [
+        type_("button"),
         attribute(
           "fx-action",
           "delete/" <> exercise.name <> "/" <> index |> int.to_string,
@@ -195,6 +209,7 @@ fn exercise_row_buttons(exercise: common.Exercise, index: Int) {
     ),
     html.button(
       [
+        type_("button"),
         attribute(
           "fx-action",
           "clone/" <> exercise.name <> "/" <> index |> int.to_string,
@@ -219,10 +234,7 @@ fn exercise_input_template() -> Element(a) {
   ])
 }
 
-pub fn get_session_mini(
-  _req: Request,
-  session: common.GymSession,
-) -> List(Element(a)) {
+pub fn get_session_mini(session: common.GymSession) -> List(Element(a)) {
   [
     section(
       [

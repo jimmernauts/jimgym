@@ -9,11 +9,10 @@ import lustre/element/html.{
   a, button, div, form, h2, h3, input, label, option, section, select, table,
   tbody, td, text, tr,
 }
-import wisp.{type Request}
 
 pub fn setup_page(
-  _req: Request,
   templates: List(common.SessionTemplate),
+  editable: Bool,
 ) -> List(Element(a)) {
   [
     div(
@@ -34,8 +33,16 @@ pub fn setup_page(
         div(
           [class("flex flex-col gap-4")],
           list.flatten([
-            templates |> list.map(view_session_template_card),
-            [view_add_template_form()],
+            case editable {
+              True -> list.map(templates, view_session_template_card)
+              False -> list.map(templates, view_read_only_template)
+            },
+            case editable {
+              True -> [view_add_template_form()]
+              False -> [
+                html.p([], [text("Template editing is not available yet.")]),
+              ]
+            },
           ]),
         ),
       ],
@@ -436,4 +443,30 @@ fn format_weight(weight: Float) -> String {
       }
     }
   }
+}
+
+fn view_read_only_template(template: common.SessionTemplate) -> Element(a) {
+  section([class("border p-4")], [
+    h3([class("font-bold")], [text(template.emoji <> " " <> template.name)]),
+    html.ul(
+      [],
+      list.map(template.exercises, fn(exercise) {
+        html.li([], [
+          text(case exercise {
+            common.SetsExerciseTemplate(name, sets, reps, weight) ->
+              name
+              <> " · "
+              <> int.to_string(sets)
+              <> "×"
+              <> int.to_string(reps)
+              <> " · "
+              <> format_weight(weight)
+              <> " kg"
+            common.TimedExerciseTemplate(name, duration) ->
+              name <> " · " <> int.to_string(duration) <> " min"
+          }),
+        ])
+      }),
+    ),
+  ])
 }
