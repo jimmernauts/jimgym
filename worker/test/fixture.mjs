@@ -13,16 +13,8 @@ function encode(value) {
 export function startFixture(port = 0) {
   const db = new Database(":memory:");
   db.exec(schema);
-  db.exec(`
-    INSERT INTO gym_sessions (date, session_name, emoji) VALUES
-      ('2026-11-09', 'Test workout <em>', '💪'), ('2026-11-10', NULL, NULL);
-    INSERT INTO exercise_records (date, name, reps, weight, duration) VALUES
-      ('2026-11-09', 'Squat', 8, 42.5, NULL),
-      ('2026-11-09', 'Squat', 8, 42.5, NULL),
-      ('2026-11-09', 'Press', 8, 20, NULL),
-      ('2026-11-09', 'Bike', NULL, NULL, 15);
-    PRAGMA query_only = ON;
-  `);
+  db.exec(seed);
+  db.exec("PRAGMA query_only = ON;");
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
@@ -53,6 +45,7 @@ export function startFixture(port = 0) {
 }
 
 const schema = await Bun.file(new URL("../../schema/schema.sql", import.meta.url)).text();
+const seed = await Bun.file(new URL("seed.sql", import.meta.url)).text();
 
 if (import.meta.main) {
   console.log(startFixture(Number(Bun.argv[2]) || 0).env);
