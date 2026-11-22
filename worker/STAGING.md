@@ -1,6 +1,6 @@
 # Stage the read-only workout page
 
-Use the `jimgym` Worker and a new `jimgym-staging` Turso database. Do not change Mealstack, jimgym on Fly, or an account-wide Access policy. Use only synthetic data.
+Use the `jimgym` Worker and the separate `jimgym-dev` Turso database. Do not change Mealstack, jimgym on Fly, or an account-wide Access policy. Use only synthetic data.
 
 ## Verify Cloudflare Access
 
@@ -10,13 +10,19 @@ Use the `jimgym` Worker and a new `jimgym-staging` Turso database. Do not change
 
 ## Connect synthetic data
 
-Sign in with the [Turso CLI](https://docs.turso.tech/cli/introduction). Create a **new, empty** database in the intended organization. Stop if the name is in use; do not apply this seed to an existing database.
+Sign in with the [Turso CLI](https://docs.turso.tech/cli/introduction). Confirm `jimgym-dev` is in the intended organization and has no user tables. If it already contains tables, stop and check whether it has already been seeded.
 
 ```sh
 cd "$(git rev-parse --show-toplevel)/worker"
-turso db create jimgym-staging
-cat ../schema/schema.sql test/seed.sql | turso db shell jimgym-staging
-turso db shell jimgym-staging 'SELECT (SELECT count(*) FROM gym_sessions) AS workouts, (SELECT count(*) FROM exercise_records) AS exercise_records;'
+turso db show jimgym-dev
+turso db shell jimgym-dev "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%';"
+```
+
+If the query returns no tables, apply the schema and synthetic seed:
+
+```sh
+cat ../schema/schema.sql test/seed.sql | turso db shell jimgym-dev
+turso db shell jimgym-dev 'SELECT (SELECT count(*) FROM gym_sessions) AS workouts, (SELECT count(*) FROM exercise_records) AS exercise_records;'
 ```
 
 Expect two workouts and four exercise records. Set the database URL and a read-only token that expires in seven days. These commands pass the values into Wrangler without printing them to the terminal.
@@ -24,8 +30,8 @@ Expect two workouts and four exercise records. Set the database URL and a read-o
 ```bash
 (
   set -euo pipefail
-  turso db show jimgym-staging --url | bunx wrangler secret put TURSO_URL
-  turso db tokens create jimgym-staging --read-only --expiration 7d | bunx wrangler secret put TURSO_AUTH_TOKEN
+  turso db show jimgym-dev --url | bunx wrangler secret put TURSO_URL
+  turso db tokens create jimgym-dev --read-only --expiration 7d | bunx wrangler secret put TURSO_AUTH_TOKEN
 )
 ```
 
