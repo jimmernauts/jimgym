@@ -5,6 +5,7 @@ WORKDIR /app
 
 # 1) Deps metadata first (cacheable)
 COPY gleam.toml manifest.toml ./
+COPY shared/ ./shared/
 # If you have any lock/manifest files, include them here
 # Pre-fetch deps (faster and cacheable)
 RUN --mount=type=cache,target=/root/.cache/gleam \

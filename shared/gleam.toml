@@ -1,0 +1,7 @@
+name = "jimgym_shared"
+version = "1.0.0"
+
+[dependencies]
+gleam_stdlib = ">= 0.60.0 and < 1.0.0"
+lustre = ">= 5.1.0 and < 6.0.0"
+rada = ">= 0.5.0 and < 1.0.0"

@@ -1,0 +1,16 @@
+{
+  "name": "jimgym-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "gleam build",
+    "dev": "bun run build && wrangler dev --local",
+    "test": "bun run build && bun test ./test"
+  },
+  "dependencies": {
+    "@tursodatabase/serverless": "1.4.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.166.0"
+  }
+}

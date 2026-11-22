@@ -15,6 +15,7 @@ gleam = ">= 1.12.0"
 # https://gleam.run/writing-gleam/gleam-toml/.
 
 [dependencies]
+jimgym_shared = { path = "./shared" }
 gleam_stdlib = ">= 0.60.0 and < 1.0.0"
 mist = ">= 5.0.3 and < 6.0.0"
 wisp = ">= 1.7.0 and < 2.0.0"
