@@ -32,7 +32,7 @@ test("serves the existing home, calendar, workout editor, preview, and template 
   expect(editor).toContain('action="/2026/11/9"');
   expect(editor).not.toContain(fixture.env.TURSO_AUTH_TOKEN);
   const preview = await (await fetchPage("/2026/11/9?mini")).text();
-  for (const value of ["2×8", "42.5kg", "20kg", "1 sets Bike 15m"]) expect(preview).toContain(value);
+  for (const value of ["8, 8 reps @ 42.5 kg", "8 reps @ 20 kg", "Bike", "15 min"]) expect(preview).toContain(value);
   expect(preview).not.toContain("<!doctype html>");
   expect(await (await fetchPage("/setup")).text()).toContain("Strength &amp; Cardio");
   expect((await fetchPage("/2026/11/10")).status).toBe(200);
@@ -58,8 +58,28 @@ test("creates once, then saves edits and replaces records", async () => {
   expect(await (await fetchPage(path)).text()).toContain("My workout");
   expect((await post(path, { session_name: "Revised workout", session_emoji: "🏋️", "Bike|name|0": "Bike", "Bike|duration|0": "22" })).status).toBe(303);
   const preview = await (await fetchPage(`${path}?mini`)).text();
-  expect(preview).toContain("Bike 22m");
+  expect(preview).toContain("Bike");
+  expect(preview).toContain("22 min");
   expect(preview).not.toContain("Pull-up");
+});
+
+test("keeps one preview row per exercise and preserves set order and weight changes", async () => {
+  const path = "/2026/11/18";
+  const fields = { session_name: "Set preview", session_emoji: "💪" };
+  const addSets = (name, sets) => sets.forEach(([reps, weight], index) => {
+    fields[`${name}|name|${index}`] = name;
+    fields[`${name}|reps|${index}`] = String(reps);
+    fields[`${name}|weight|${index}`] = String(weight);
+  });
+  addSets("Bench", [[8, 50], [8, 50], [6, 50]]);
+  addSets("Rows", [[10, 20], [6, 25.25], [8, 20]]);
+  addSets("Chin-up", [[5, -1], [4, -1]]);
+  expect((await post(`${path}?new`, fields)).status).toBe(303);
+  const preview = await (await fetchPage(`${path}?mini`)).text();
+  expect(preview.match(/>Bench<\/th>/g)).toHaveLength(1);
+  expect(preview).toContain("8, 8, 6 reps @ 50 kg");
+  expect(preview).toContain("10 reps @ 20 kg; 6 reps @ 25.25 kg; 8 reps @ 20 kg");
+  expect(preview).toContain("5, 4 reps (bodyweight)");
 });
 
 test("rejects cross-origin and invalid saves and rolls back an insert failure", async () => {
@@ -68,7 +88,7 @@ test("rejects cross-origin and invalid saves and rolls back an insert failure", 
   expect((await post(path, { ...workout, "Ride|duration|0": "bad" })).status).toBe(400);
   expect((await post(path, { ...workout, "Ride|name|0": "Simulate storage failure" })).status).toBe(502);
   expect(await (await fetchPage(path)).text()).toContain("Test workout &lt;em&gt;");
-  expect(await (await fetchPage(`${path}?mini`)).text()).toContain("42.5kg");
+  expect(await (await fetchPage(`${path}?mini`)).text()).toContain("42.5 kg");
 });
 
 test("rejects invalid routes and reports an unavailable database without leaking details", async () => {

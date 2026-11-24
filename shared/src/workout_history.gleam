@@ -3,70 +3,77 @@ import gleam/dict
 import gleam/float
 import gleam/int
 import gleam/list
-import lustre/attribute.{class, colspan}
+import gleam/string
+import lustre/attribute.{class, scope}
 import lustre/element.{type Element}
-import lustre/element/html.{table, tbody, td, text, tr}
+import lustre/element/html.{table, tbody, td, text, th, tr}
 
 pub fn view(exercises: dict.Dict(String, List(common.Exercise))) -> Element(a) {
   table([class("col-span-6 text-sm")], [
     tbody(
       [],
-      exercises |> dict.values |> list.flat_map(view_exercise_history_group),
+      dict.to_list(exercises)
+        |> list.map(fn(group) {
+          let #(name, sets) = group
+          tr([class("border-b border-gray-100")], [
+            th([scope("row"), class("py-1 text-left")], [text(name)]),
+            // list.group builds each group in reverse record order.
+            td([class("py-1")], [text(describe_sets(list.reverse(sets)))]),
+          ])
+        }),
     ),
   ])
 }
 
-fn view_exercise_history_group(
-  exercises: List(common.Exercise),
-) -> List(Element(a)) {
-  common.group_exercises_by_sets(exercises)
-  |> list.map(view_exercise_history)
+fn describe_sets(sets: List(common.Exercise)) -> String {
+  case sets {
+    [common.SetsExercise(_, _, weight), ..] -> {
+      case
+        list.all(sets, fn(set) {
+          case set {
+            common.SetsExercise(_, _, other) -> weight == other
+            _ -> False
+          }
+        })
+      {
+        True -> {
+          let reps =
+            list.filter_map(sets, fn(set) {
+              case set {
+                common.SetsExercise(_, reps, _) -> Ok(int.to_string(reps))
+                _ -> Error(Nil)
+              }
+            })
+          string.join(reps, ", ") <> " reps" <> weight_suffix(weight)
+        }
+        False -> list.map(sets, describe_set) |> string.join("; ")
+      }
+    }
+    [common.TimedExercise(..), ..] ->
+      list.map(sets, describe_set) |> string.join("; ")
+    [] -> ""
+  }
 }
 
-fn view_exercise_history(sets: #(Int, common.Exercise)) -> Element(a) {
-  case sets.1 {
-    common.SetsExercise(name, reps, weight) ->
-      tr([class("border-b border-gray-100")], [
-        td([class("py-1 text-center")], [
-          text(int.to_string(sets.0) <> "×" <> int.to_string(reps)),
-        ]),
-        td([class("py-1")], [text(name)]),
-        td([class("py-1 text-center")], [
-          text(case weight {
-            0.0 -> ""
-            weight -> {
-              // Check if it's effectively an integer
-              let int_part = float.truncate(weight)
-              let decimal_part = weight -. int.to_float(int_part)
+fn describe_set(set: common.Exercise) -> String {
+  case set {
+    common.SetsExercise(_, reps, weight) ->
+      int.to_string(reps) <> " reps" <> weight_suffix(weight)
+    common.TimedExercise(_, duration) -> int.to_string(duration) <> " min"
+  }
+}
 
-              case decimal_part <. 0.01 || decimal_part >. 0.99 {
-                True -> int.to_string(int_part) <> "kg"
-                False -> {
-                  // Format with one decimal place
-                  let decimal_str =
-                    decimal_part *. 10.0
-                    |> float.round
-                    |> int.to_string
-
-                  int.to_string(int_part) <> "." <> decimal_str <> "kg"
-                }
-              }
-            }
-          }),
-        ]),
-      ])
-    common.TimedExercise(name, duration) ->
-      tr([], [
-        td([colspan(3)], [
-          text(
-            int.to_string(sets.0)
-            <> " sets "
-            <> name
-            <> " "
-            <> int.to_string(duration)
-            <> "m",
-          ),
-        ]),
-      ])
+fn weight_suffix(weight: Float) -> String {
+  case weight {
+    -1.0 -> " (bodyweight)"
+    0.0 -> " @ 0 kg"
+    _ -> {
+      let label = float.to_string(weight)
+      let label = case string.ends_with(label, ".0") {
+        True -> string.drop_end(label, 2)
+        False -> label
+      }
+      " @ " <> label <> " kg"
+    }
   }
 }
