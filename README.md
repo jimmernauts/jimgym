@@ -7,7 +7,7 @@ jimgym tracks gym workouts and templates. Gleam and Lustre render HTML on a Clou
 | Stage | Worker | Database | What to check |
 |---|---|---|---|
 | Local | Wrangler on localhost | Synthetic SQLite fixture | Run the tests. Use the browser to exercise the changed workflow. |
-| Dev | Shared Cloudflare Workers Preview named `dev` **(not live yet)** | `jimgym-dev` in Turso | Check the release on Cloudflare: sign in, open the changed screens, and test saves against dev only. |
+| Dev | Shared Cloudflare Workers Preview named `dev` ([dev site](https://dev-jimgym.jimmernauts.workers.dev)) | `jimgym-dev` in Turso | Check the release on Cloudflare: sign in, open the changed screens, and test saves against dev only. |
 | Prod | Existing `jimgym` Worker behind Access | `jimgym-prod` in Turso | Release the same tested commit. Check sign-in and confirm a known workout opens. |
 
 Start with the [local run instructions](worker/README.md). Run `bun run test` from the `worker` directory. Local tests do not need cloud credentials. Keep production credentials out of local development, Git, and chat.
@@ -43,6 +43,6 @@ bunx wrangler deployments status
 
 Replace `NEW_VERSION_ID` with the ID from the upload. Before deploying, check that `versions view` lists both `TURSO_URL` and `TURSO_AUTH_TOKEN` as secrets. Record the prior and new version IDs. Check that signed-out requests to a workout page and its stylesheet still redirect to Access. Sign in and open a known workout including its sets. If the code release fails, redeploy the prior version if it is compatible with the current schema and secrets. A Worker rollback does not reverse Turso writes or schema changes. Take a verified database backup before a production schema migration.
 
-Use the version commands, not `wrangler deploy` or `wrangler triggers deploy`, for a code-only production release. The checked-in Wrangler configuration disables `workers.dev` if applied as a trigger change. Do not change the production Worker’s routes or the preview routing settings as part of a code release. The legacy Fly GitHub workflow still exists and runs on pushes to `main`; it does not deploy to Cloudflare. Remove it before merging this branch to `main`.
+Use the version commands, not `wrangler deploy` or `wrangler triggers deploy`, for a code-only production release. The checked-in Wrangler configuration disables `workers.dev` if applied as a trigger change. Do not change the production Worker’s routes or the preview routing settings as part of a code release. A push to `main` does not deploy production.
 
 See the [database verification instructions](worker/README.md#verify-a-database-import) for the read-only checks used during migration.
