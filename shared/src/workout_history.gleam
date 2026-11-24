@@ -25,7 +25,7 @@ pub fn view(exercises: dict.Dict(String, List(common.Exercise))) -> Element(a) {
   ])
 }
 
-fn describe_sets(sets: List(common.Exercise)) -> String {
+pub fn describe_sets(sets: List(common.Exercise)) -> String {
   case sets {
     [common.SetsExercise(_, _, weight), ..] -> {
       case
@@ -66,7 +66,7 @@ fn describe_set(set: common.Exercise) -> String {
 fn weight_suffix(weight: Float) -> String {
   case weight {
     -1.0 -> " (bodyweight)"
-    0.0 -> " @ 0 kg"
+    0.0 -> ""
     _ -> {
       let label = float.to_string(weight)
       let label = case string.ends_with(label, ".0") {

@@ -21,7 +21,9 @@ In a second terminal, start the Worker. These are fixture values, not production
 bun run dev --ip 127.0.0.1 --var TURSO_URL:http://127.0.0.1:8790 --var TURSO_AUTH_TOKEN:synthetic-test-token
 ```
 
-Open [the calendar](http://127.0.0.1:8787/2026/11), select an empty date, and choose a template. Edit the workout, then use the save button. The fixture uses the app’s schema and synthetic workouts and templates. It does not read or change existing workout data.
+Open [the calendar](http://127.0.0.1:8787/2026/11), select an empty date, and choose a workout family. Pick activities from the family shortlist or choose an earlier workout in that family to copy its sets and durations. Manage the family shortlists in Setup. Earlier workouts match the family by name.
+
+The editor groups sets by exercise. Use **Move up** or **Move down** and save the workout to keep the new order. Use **History (new tab)** to see up to eight earlier workouts for an exercise without losing edits. The fixture uses the app’s schema with synthetic data only.
 
 The local Worker does not use Cloudflare Access. For staging, use a separate Turso database and store its token as a Worker secret. Do not use Mealstack or production jimgym data.
 

@@ -1,13 +1,19 @@
 import common
+import gleam/dict
 import gleam/dynamic/decode
+import gleam/int
 import gleam/json
+import gleam/list
 import gleam/option
 import gleam/result
 import gleam/string_tree
+import lustre/attribute as attr
+import lustre/element/html
 import pages/get_session
 import pages/list_sessions
 import pages/setup
 import rada/date
+import workout_history
 import workout_pages
 
 pub fn render_page(
@@ -20,12 +26,13 @@ pub fn render_page(
   let decoder = {
     use sessions <- decode.field("sessions", decode.list(session_decoder()))
     use templates <- decode.field("templates", decode.list(template_decoder()))
-    decode.success(#(sessions, templates))
+    use order <- decode.field("order", decode.list(decode.string))
+    decode.success(#(sessions, templates, order))
   }
   use model <- result.try(
     json.parse(payload, decoder) |> result.replace_error(Nil),
   )
-  let #(sessions, templates) = model
+  let #(sessions, templates, order) = model
   case page, sessions {
     "home", _ ->
       Ok(
@@ -50,7 +57,8 @@ pub fn render_page(
         workout_pages.view_fragment(get_session.get_session_mini(session))
         |> string_tree.to_string,
       )
-    "editor", [session] -> Ok(editor(session, action))
+    "editor", [session] -> Ok(editor(session, action, order))
+    "history", _ -> Ok(history(action, sessions))
     _, _ -> Error(Nil)
   }
 }
@@ -74,14 +82,167 @@ pub fn new_workout(
       template.emoji,
     ),
     action,
+    list.map(template.exercises, fn(exercise) { exercise.name }) |> list.unique,
   )
 }
 
-fn editor(session: common.GymSession, action: String) -> String {
-  workout_pages.view(get_session.get_session(session, action), [
+fn editor(
+  session: common.GymSession,
+  action: String,
+  order: List(String),
+) -> String {
+  workout_pages.view(get_session.grouped_session(session, action, order), [
     workout_pages.add_input_button(),
     workout_pages.save_session_button(),
   ])
+  |> string_tree.to_string
+}
+
+pub fn choose_start(iso: String, payload: String) -> Result(String, Nil) {
+  let decoder = {
+    use family <- decode.field("family", template_decoder())
+    use prior <- decode.field("prior", decode.list(decode.string))
+    decode.success(#(family, prior))
+  }
+  use model <- result.map(
+    json.parse(payload, decoder) |> result.replace_error(Nil),
+  )
+  let #(family, prior) = model
+  let hidden = fn(key, value) {
+    html.input([attr.type_("hidden"), attr.name(key), attr.value(value)])
+  }
+  let fields = [hidden("template", family.name), hidden("date", iso)]
+  let form_attrs = [
+    attr.action("/new"),
+    attr.method("get"),
+    attr.class("border p-2 space-y-2"),
+  ]
+  let submit = fn(label) {
+    html.button([attr.type_("submit"), attr.class("border rounded px-2")], [
+      html.text(label),
+    ])
+  }
+  workout_pages.view(
+    [
+      html.h1(
+        [
+          attr.class(
+            "row-start-[header] col-[main-start_/_main-end] text-3xl font-bold",
+          ),
+        ],
+        [html.text(family.name)],
+      ),
+      html.section(
+        [
+          attr.class(
+            "row-start-[content] col-[main-start_/_main-end] overflow-y-auto space-y-2",
+          ),
+        ],
+        [
+          html.form(
+            form_attrs,
+            list.append(fields, [
+              hidden("start", "pick"),
+              html.h2([attr.class("font-bold")], [html.text("Pick activities")]),
+              html.p([], [
+                html.text("Select the activities you want, or start with none."),
+              ]),
+              html.fieldset(
+                [],
+                list.index_map(family.exercises, fn(exercise, index) {
+                  html.label([attr.class("block")], [
+                    html.input([
+                      attr.type_("checkbox"),
+                      attr.name("activity"),
+                      attr.value(int.to_string(index)),
+                    ]),
+                    html.text(" " <> exercise.name),
+                  ])
+                }),
+              ),
+              submit("Start workout"),
+            ]),
+          ),
+          case prior {
+            [] -> html.p([], [html.text("No earlier workouts in this family.")])
+            _ ->
+              html.form(
+                form_attrs,
+                list.append(fields, [
+                  html.label([attr.for("clone-workout")], [
+                    html.text("Clone a prior workout"),
+                  ]),
+                  html.select(
+                    [attr.id("clone-workout"), attr.name("clone")],
+                    list.map(prior, fn(day) {
+                      html.option([attr.value(day)], day)
+                    }),
+                  ),
+                  submit("Clone workout"),
+                ]),
+              )
+          },
+        ],
+      ),
+    ],
+    [],
+  )
+  |> string_tree.to_string
+}
+
+fn history(name: String, sessions: List(common.GymSession)) -> String {
+  workout_pages.view(
+    [
+      html.h1(
+        [
+          attr.class(
+            "row-start-[header] col-[main-start_/_main-end] text-3xl font-bold",
+          ),
+        ],
+        [html.text(name <> " history")],
+      ),
+      html.section(
+        [
+          attr.class(
+            "row-start-[content] col-[main-start_/_main-end] overflow-y-auto",
+          ),
+        ],
+        [
+          case sessions {
+            [] ->
+              html.p([], [
+                html.text("No earlier sets recorded for this exercise."),
+              ])
+            _ ->
+              html.ol(
+                [],
+                list.map(sessions, fn(session) {
+                  let day = date.to_iso_string(session.date)
+                  let path =
+                    "/"
+                    <> int.to_string(date.year(session.date))
+                    <> "/"
+                    <> int.to_string(date.month_number(session.date))
+                    <> "/"
+                    <> int.to_string(date.day(session.date))
+                  let sets =
+                    dict.get(session.exercises, name)
+                    |> result.unwrap([])
+                    |> list.reverse
+                  html.li([attr.class("border-b py-2")], [
+                    html.a([attr.href(path), attr.class("underline")], [
+                      html.text(day <> " · " <> session.session_name),
+                    ]),
+                    html.p([], [html.text(workout_history.describe_sets(sets))]),
+                  ])
+                }),
+              )
+          },
+        ],
+      ),
+    ],
+    [],
+  )
   |> string_tree.to_string
 }
 

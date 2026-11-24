@@ -1,5 +1,20 @@
 let JimGymApp = {};
 
+// Moving the actual form controls also changes their submission order.
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-move]");
+  if (!button) return;
+  const group = button.closest("[data-exercise-group]");
+  if (button.dataset.move === "up") {
+    const previous = group.previousElementSibling;
+    if (previous?.hasAttribute("data-exercise-group")) previous.before(group);
+  } else {
+    const next = group.nextElementSibling;
+    if (next?.hasAttribute("data-exercise-group")) next.after(group);
+  }
+  button.focus({ preventScroll: true });
+});
+
 let find_exercise_row = (name, index) => {
   console.log(
     "finding row",
@@ -19,7 +34,7 @@ document.addEventListener("fx:config", (evt) => {
     JimGymApp.template_insertions++;
     evt.detail.cfg.fetch = () => ({
       text: () =>
-        template.innerHTML.replaceAll("-99", JimGymApp.template_insertions),
+        template.innerHTML.replaceAll("-99", -100 - JimGymApp.template_insertions),
     });
   }
   // if the action is exactly "delete-my-parent", override the fetch function to return an empty string, deleting the target's parent element.

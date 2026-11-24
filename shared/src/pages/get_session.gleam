@@ -2,7 +2,9 @@ import common
 import gleam/dict
 import gleam/int
 import gleam/list
+import gleam/result
 import gleam/string
+import gleam/uri
 import lustre/attribute.{attribute, class, href, id, name, type_}
 import lustre/element.{type Element}
 import lustre/element/html.{a, div, form, h1, section, text}
@@ -13,6 +15,34 @@ pub fn get_session(
   session: common.GymSession,
   action: String,
 ) -> List(Element(a)) {
+  editor(session, action, [])
+}
+
+pub fn grouped_session(session: common.GymSession, action: String, order: List(String)) -> List(Element(a)) {
+  let groups = order |> list.filter_map(fn(key) {
+    use rows <- result.map(dict.get(session.exercises, key))
+    let history = "/exercise?name=" <> uri.percent_encode(key)
+      <> "&before=" <> date.to_iso_string(session.date)
+    let move = fn(direction, label) {
+      html.button([type_("button"), attribute("data-move", direction), attribute.aria_label(label)], [text(label)])
+    }
+    html.section([
+      class("col-span-full grid gap-1 border p-2"),
+      attribute.style("grid-template-columns", "repeat(12,minmax(0,1fr))"),
+      attribute("data-exercise-group", ""),
+    ], [
+      div([class("col-span-full flex flex-wrap gap-2 items-center")], [
+        html.h2([class("font-bold")], [text(key)]),
+        move("up", "Move up"), move("down", "Move down"),
+        a([href(history), attribute.target("_blank"), attribute.rel("noopener"), class("underline")], [text("History (new tab)")]),
+      ]),
+      ..rows |> list.reverse |> list.index_map(view_exercise_input)
+    ])
+  })
+  editor(session, action, groups)
+}
+
+fn editor(session: common.GymSession, action: String, groups: List(Element(a))) -> List(Element(a)) {
   [
     h1(
       [
@@ -51,10 +81,12 @@ pub fn get_session(
         id("session-form"),
         attribute.action(action),
       ],
-      session.exercises
-        |> dict.to_list
-        |> list.map(fn(group) { group.1 |> list.index_map(view_exercise_input) })
-        |> list.flatten,
+      case groups {
+        [] -> session.exercises
+          |> dict.to_list
+          |> list.flat_map(fn(group) { list.index_map(group.1, view_exercise_input) })
+        _ -> groups
+      },
     ),
     exercise_input_template(),
   ]
