@@ -29,6 +29,7 @@ pub fn view(
       html.title([], "Jim's Gym Tracker"),
       html.link([rel("icon"), href("/favicon.svg"), type_("image/svg+xml")]),
       html.link([rel("stylesheet"), href("/jimgym.css")]),
+      html.link([rel("stylesheet"), href("/workout.css")]),
     ]),
     html.body([], [
       html.main(
@@ -167,7 +168,7 @@ pub fn save_session_button() -> Element(a) {
       attribute.formmethod("post"),
       class("self-center"),
     ],
-    [text("💾")],
+    [text("Save workout")],
   )
 }
 
@@ -179,7 +180,7 @@ pub fn add_input_button() -> Element(a) {
         attribute.popovertarget("add-input-picker"),
         style("anchor-name", "--add-input-picker"),
       ],
-      [text("➕")],
+      [text("Add exercise")],
     ),
     html.aside(
       [
@@ -199,7 +200,7 @@ pub fn add_input_button() -> Element(a) {
             attribute("fx-target", "#session-form"),
             attribute("fx-swap", "beforeend"),
           ],
-          [text("🔢")],
+          [text("Reps and weight")],
         ),
         html.button(
           [
@@ -207,7 +208,7 @@ pub fn add_input_button() -> Element(a) {
             attribute("fx-target", "#session-form"),
             attribute("fx-swap", "beforeend"),
           ],
-          [text("⏱️")],
+          [text("Timed exercise")],
         ),
       ],
     ),
@@ -230,7 +231,7 @@ fn view_nav(children: List(Element(a))) -> Element(a) {
         "col-[main-start_/_main-end] row-start-[footer] text-2xl p-4 border-t border-uchu-yin gap-6 flex justify-around flex-row",
       ),
     ],
-    [a([attribute.href("/"), class("self-center")], [text("🏡")]), ..children],
+    [a([attribute.href("/"), class("self-center")], [text("Home")]), ..children],
   )
 }
 

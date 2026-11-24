@@ -59,10 +59,28 @@ test("offers a family shortlist and clones only the explicitly selected earlier 
   expect(choices).toContain("Clone a prior workout");
   expect(choices).toContain('value="2026-11-11"');
   expect(choices).toContain('value="2026-11-09"');
+  expect(choices).toContain('<time datetime="2026-11-09">Monday 9 November</time>');
+  expect(choices).toContain('<time datetime="2026-11-11">Wednesday 11 November</time>');
+  expect(choices).toContain('8, 8 reps @ 42.5 kg');
+  expect(choices).toContain('15 min');
   const previous = await (await fetchPage(`${pastFamily}&clone=2026-11-09`)).text();
   expect(previous).toContain('name="Squat|weight|0" step="0.5" type="number" value="42.5"');
   expect((await fetchPage(`${pastFamily}&clone=2026-11-12`)).status).toBe(400);
   expect((await fetchPage("/2026/11/12")).status).toBe(404);
+});
+
+test("Whole Body accepts legacy A and C history without renaming the source", async () => {
+  const name = "Whole Body";
+  expect((await post("/setup/create", { template_name: name, emoji: "💪" })).status).toBe(303);
+  expect((await post("/2026/11/16?new", { ...workout, session_name: "Whole Body A" })).status).toBe(303);
+  expect((await post("/2026/11/17?new", { ...workout, session_name: "Whole Body C" })).status).toBe(303);
+  const path = "/new?template=Whole+Body&date=2026-11-18";
+  const picker = await (await fetchPage(path)).text();
+  expect(picker).toContain("Monday 16 November");
+  expect(picker).toContain("Tuesday 17 November");
+  const draft = await (await fetchPage(`${path}&clone=2026-11-17`)).text();
+  expect(draft).toContain('value="Whole Body"');
+  expect(await (await fetchPage("/2026/11/17")).text()).toContain('value="Whole Body C"');
 });
 
 test("creates once, then saves edits and replaces records", async () => {

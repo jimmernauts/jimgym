@@ -17,6 +17,17 @@ const render = (page, { sessions = [], templates = [], year = 0, month = 0, acti
   const order = [...new Set(sessions[0]?.exercises.map(({ name }) => name))];
   return html(render_page(page, year, month, action, JSON.stringify({ sessions, templates, order })));
 };
+const cloneDate = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+
+function sessionsFromRows(rows) {
+  const sessions = new Map();
+  for (const { date, session_name, emoji, ...exercise } of rows) {
+    if (!sessions.has(date)) sessions.set(date, { date, session_name, emoji, exercises: [] });
+    if (exercise.name !== null) sessions.get(date).exercises.push(exercise);
+  }
+  return [...sessions.values()];
+}
+
 const isIsoDate = (iso) => /^\d{4}-\d{2}-\d{2}$/.test(iso ?? "") && workoutDate('/' + iso.replaceAll('-', '/')) === iso;
 
 function workoutDate(path) {
@@ -78,12 +89,7 @@ export default {
           FROM exercise_records e JOIN gym_sessions s ON s.date = e.date
           WHERE e.name = ? AND e.date IN (SELECT DISTINCT date FROM exercise_records WHERE name = ? AND date < ? ORDER BY date DESC LIMIT 8)
           ORDER BY s.date DESC, e.id`, name, name, before);
-        const sessions = new Map();
-        for (const { date, session_name, emoji, ...exercise } of rows) {
-          if (!sessions.has(date)) sessions.set(date, { date, session_name, emoji, exercises: [] });
-          sessions.get(date).exercises.push(exercise);
-        }
-        return render("history", { action: name, sessions: [...sessions.values()] });
+        return render("history", { action: name, sessions: sessionsFromRows(rows) });
       }
       if (starting) {
         const name = url.searchParams.get("template");
@@ -93,12 +99,14 @@ export default {
         if (await getWorkout(db, iso)) return redirect(action);
         const [template] = await getTemplates(db, name);
         if (!template) return notFound();
+        // Keep the labels on old sessions and still offer them in the merged family.
+        const aliases = name === "Whole Body" ? [name, "Whole Body A", "Whole Body C"] : [name];
         const clone = url.searchParams.get("clone");
         if (clone !== null) {
           if (!isIsoDate(clone) || clone >= iso) return respond("Choose an earlier workout", 400);
           const prior = await getWorkout(db, clone);
-          if (!prior || prior.session_name !== name) return notFound();
-          return render("editor", { sessions: [{ ...prior, date: iso }], action: `${action}?new` });
+          if (!prior || !aliases.includes(prior.session_name)) return notFound();
+          return render("editor", { sessions: [{ ...prior, date: iso, session_name: name }], action: `${action}?new` });
         }
         if (url.searchParams.get("start") === "pick") {
           const selected = url.searchParams.getAll("activity");
@@ -107,8 +115,13 @@ export default {
           const activities = template.exercises.filter((_, index) => indices.has(index));
           return html(new_workout(iso, `${action}?new`, JSON.stringify({ ...template, exercises: activities })));
         }
-        const rows = await db.all("SELECT date FROM gym_sessions WHERE session_name = ? AND date < ? ORDER BY date DESC", name, iso);
-        return html(choose_start(iso, JSON.stringify({ family: template, prior: rows.map(({ date }) => date) })));
+        const rows = await db.all(`SELECT s.date, s.session_name, s.emoji, e.name, e.reps, e.weight, e.duration
+          FROM gym_sessions s LEFT JOIN exercise_records e ON s.date = e.date
+          WHERE s.session_name IN (${aliases.map(() => "?").join(", ")}) AND s.date < ? ORDER BY s.date DESC, e.id`, [...aliases, iso]);
+        const prior = sessionsFromRows(rows).map((session) => ({
+          session, label: cloneDate.format(new Date(`${session.date}T00:00:00Z`)),
+        }));
+        return html(choose_start(iso, JSON.stringify({ family: template, prior })));
       }
       const templates = await getTemplates(db);
       if (pathname === "/setup") return render("setup", { templates });

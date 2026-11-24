@@ -27,14 +27,15 @@ pub fn grouped_session(session: common.GymSession, action: String, order: List(S
       html.button([type_("button"), attribute("data-move", direction), attribute.aria_label(label)], [text(label)])
     }
     html.section([
-      class("col-span-full grid gap-1 border p-2"),
-      attribute.style("grid-template-columns", "repeat(12,minmax(0,1fr))"),
+      class("exercise-group"),
       attribute("data-exercise-group", ""),
     ], [
-      div([class("col-span-full flex flex-wrap gap-2 items-center")], [
-        html.h2([class("font-bold")], [text(key)]),
-        move("up", "Move up"), move("down", "Move down"),
-        a([href(history), attribute.target("_blank"), attribute.rel("noopener"), class("underline")], [text("History (new tab)")]),
+      div([class("exercise-group-header")], [
+        html.h2([], [text(key)]),
+        div([class("exercise-group-actions")], [
+          a([href(history), attribute.target("_blank"), attribute.rel("noopener"), class("underline"), attribute.aria_label("History for " <> key <> " (new tab)")], [text("History")]),
+          move("up", "Move up"), move("down", "Move down"),
+        ]),
       ]),
       ..rows |> list.reverse |> list.index_map(view_exercise_input)
     ])
@@ -47,7 +48,7 @@ fn editor(session: common.GymSession, action: String, groups: List(Element(a))) 
     h1(
       [
         class(
-          "font-slab items-center text-4xl font-bold col-[main-start_/_main-end] row-start-[header] flex flex-row gap-2",
+          "workout-title font-slab items-center text-4xl font-bold col-[main-start_/_main-end] row-start-[header] flex flex-row gap-2",
         ),
         attribute.style("min-width", "0"),
       ],
@@ -76,7 +77,7 @@ fn editor(session: common.GymSession, action: String, groups: List(Element(a))) 
     form(
       [
         class(
-          "row-start-[content] overflow-y-scroll gap-1 gap-y-3 grid col-[main-start_/_main-end] grid-cols-12 grid-rows-auto w-full text-sm",
+          "workout-editor row-start-[content] overflow-y-scroll gap-1 gap-y-3 grid col-[main-start_/_main-end] grid-cols-12 grid-rows-auto w-full text-sm",
         ),
         id("session-form"),
         attribute.action(action),
@@ -97,7 +98,7 @@ fn editor(session: common.GymSession, action: String, groups: List(Element(a))) 
 fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
   div(
     [
-      class("text-xl col-span-full subgrid-cols gap-1 items-baseline"),
+      class("exercise-set text-xl col-span-full subgrid-cols gap-1 items-baseline"),
       id(
         "exercise_"
         <> exercise.name |> string.replace(" ", "_")
@@ -121,8 +122,9 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
         exercise_row_buttons(exercise, index),
       ]
       common.TimedExercise(name, duration) -> [
-        div([class("col-span-3 flex justify-center gap-1")], [
+        div([class("exercise-duration col-span-3 flex justify-center gap-1")], [
           html.input([
+            attribute.aria_label("Minutes"),
             class("text-right"),
             type_("number"),
             attribute.name(
@@ -130,7 +132,7 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
             ),
             attribute.value(duration |> int.to_string),
           ]),
-          text("m"),
+          html.span([class("exercise-duration-unit")], [text("m")]),
         ]),
         name_input(name, index),
         exercise_row_buttons(exercise, index),
@@ -140,8 +142,9 @@ fn view_exercise_input(exercise: common.Exercise, index: Int) -> Element(a) {
 }
 
 fn rep_input(name: String, reps: Int, index: Int) {
-  div([class("col-span-2 flex items-start justify-between gap-1")], [
+  div([class("exercise-reps col-span-2 flex items-start justify-between gap-1")], [
     html.input([
+      attribute.aria_label("Reps"),
       class("w-[2ch] text-right"),
       type_("number"),
       attribute.step("1"),
@@ -176,9 +179,10 @@ fn rep_input(name: String, reps: Int, index: Int) {
 }
 
 fn weight_input(name: String, weight: Float, index: Int) {
-  div([class("col-span-3 flex justify-between gap-1")], [
+  div([class("exercise-weight col-span-3 flex justify-between gap-1")], [
     div([class("items-baseline flex text-sm")], [
       html.input([
+        attribute.aria_label("Weight in kilograms"),
         class("w-[3.5ch] text-right text-xl"),
         type_("number"),
         attribute.step("0.5"),
@@ -219,7 +223,8 @@ fn weight_input(name: String, weight: Float, index: Int) {
 
 fn name_input(name: String, index: Int) {
   html.input([
-    class("col-start-4 col-span-5 text-left field-sizing-content"),
+    class("exercise-name col-start-4 col-span-5 text-left field-sizing-content"),
+    attribute.aria_label("Exercise name"),
     type_("text"),
     attribute.value(name),
     attribute.name(name <> "|name|" <> index |> int.to_string),
@@ -227,7 +232,7 @@ fn name_input(name: String, index: Int) {
 }
 
 fn exercise_row_buttons(exercise: common.Exercise, index: Int) {
-  div([class("col-start-12 flex flex-col self-end text-sm gap-1")], [
+  div([class("exercise-set-actions col-start-12 flex flex-col self-end text-sm gap-1")], [
     html.button(
       [
         type_("button"),
@@ -237,7 +242,7 @@ fn exercise_row_buttons(exercise: common.Exercise, index: Int) {
         ),
         attribute("fx-swap", "outerHTML"),
       ],
-      [text("❌")],
+      [text("Delete")],
     ),
     html.button(
       [
@@ -248,7 +253,7 @@ fn exercise_row_buttons(exercise: common.Exercise, index: Int) {
         ),
         attribute("fx-swap", "afterend"),
       ],
-      [text("📚")],
+      [text("Copy")],
     ),
   ])
 }

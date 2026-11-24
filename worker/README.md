@@ -23,9 +23,15 @@ bun run dev --ip 127.0.0.1 --var TURSO_URL:http://127.0.0.1:8790 --var TURSO_AUT
 
 Open [the calendar](http://127.0.0.1:8787/2026/11), select an empty date, and choose a workout family. Pick activities from the family shortlist or choose an earlier workout in that family to copy its sets and durations. Manage the family shortlists in Setup. Earlier workouts match the family by name.
 
-The editor groups sets by exercise. Use **Move up** or **Move down** and save the workout to keep the new order. Use **History (new tab)** to see up to eight earlier workouts for an exercise without losing edits. The fixture uses the app’s schema with synthetic data only.
+The editor groups sets by exercise. Use **Move up** or **Move down** and save the workout to keep the new order. Use **History** to open a new tab and see up to eight earlier workouts for an exercise without losing edits. The fixture uses the app’s schema with synthetic data only.
 
 The local Worker does not use Cloudflare Access. For staging, use a separate Turso database and store its token as a Worker secret. Do not use Mealstack or production jimgym data.
+
+## Merge the workout families
+
+`merge-workout-families.sql` replaces the `Whole Body A` and `Whole Body C` templates with `Whole Body`, and creates a `Legs` template. The Worker still offers earlier A and C workouts in the Whole Body clone picker. The change does not rename any recorded workouts or exercises. It leaves `Whole Body B`, `Whole Body Full`, `Cardio`, and `Ride` history unchanged.
+
+Apply this SQL only once per database, in one transaction. Before applying it to Turso, rehearse on a copy of that database. Check that both old templates exist and neither `Whole Body` nor `Legs` exists. Verify that the new templates have 10 and 12 exercises, respectively, and that historical rows have not changed. Deploy the Worker to dev before changing dev data. Do not change production until the split is reviewed.
 
 ## Verify a database import
 

@@ -101,7 +101,12 @@ fn editor(
 pub fn choose_start(iso: String, payload: String) -> Result(String, Nil) {
   let decoder = {
     use family <- decode.field("family", template_decoder())
-    use prior <- decode.field("prior", decode.list(decode.string))
+    let preview = {
+      use label <- decode.field("label", decode.string)
+      use session <- decode.field("session", session_decoder())
+      decode.success(#(label, session))
+    }
+    use prior <- decode.field("prior", decode.list(preview))
     decode.success(#(family, prior))
   }
   use model <- result.map(
@@ -135,7 +140,7 @@ pub fn choose_start(iso: String, payload: String) -> Result(String, Nil) {
       html.section(
         [
           attr.class(
-            "row-start-[content] col-[main-start_/_main-end] overflow-y-auto space-y-2",
+            "workout-start row-start-[content] col-[main-start_/_main-end]",
           ),
         ],
         [
@@ -163,25 +168,35 @@ pub fn choose_start(iso: String, payload: String) -> Result(String, Nil) {
               submit("Start workout"),
             ]),
           ),
-          case prior {
-            [] -> html.p([], [html.text("No earlier workouts in this family.")])
+          html.h2([], [html.text("Clone a prior workout")]),
+          ..case prior {
+            [] -> [
+              html.p([], [html.text("No earlier workouts in this family.")]),
+            ]
             _ ->
-              html.form(
-                form_attrs,
-                list.append(fields, [
-                  html.label([attr.for("clone-workout")], [
-                    html.text("Clone a prior workout"),
+              list.map(prior, fn(item) {
+                let #(label, session) = item
+                let day = date.to_iso_string(session.date)
+                html.details([], [
+                  html.summary([], [
+                    html.time([attr.attribute("datetime", day)], [
+                      html.text(label),
+                    ]),
                   ]),
-                  html.select(
-                    [attr.id("clone-workout"), attr.name("clone")],
-                    list.map(prior, fn(day) {
-                      html.option([attr.value(day)], day)
-                    }),
+                  case dict.is_empty(session.exercises) {
+                    True -> html.p([], [html.text("No exercises recorded.")])
+                    False -> workout_history.view(session.exercises)
+                  },
+                  html.form(
+                    form_attrs,
+                    list.append(fields, [
+                      hidden("clone", day),
+                      submit("Clone workout"),
+                    ]),
                   ),
-                  submit("Clone workout"),
-                ]),
-              )
-          },
+                ])
+              })
+          }
         ],
       ),
     ],
