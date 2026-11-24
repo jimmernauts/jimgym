@@ -18,7 +18,9 @@ Use one [Workers Preview](https://developers.cloudflare.com/workers/previews/) n
 
 For initial setup, create the preview without database secrets. In the Cloudflare dashboard, protect `jimgym` preview traffic with owner-only Access without changing the existing production rule. Verify signed-out requests to the preview page and stylesheet are blocked before adding any secrets. [Preview URLs are public by default](https://developers.cloudflare.com/workers/previews/custom-domains/#protect-preview-content). Do not use a production Version URL as the dev preview.
 
-From the `worker` directory, build and upload the tested commit to the same preview every time:
+Push to `dev` to run the Worker tests and update the shared preview. The workflow does not run on `main` or deploy production. Before enabling it, verify owner-only Access on both the stable URL and a deployment-specific preview URL. In GitHub, set up the `dev-preview` environment for the `dev` branch only. Add a `CLOUDFLARE_ACCOUNT_ID` variable and a `CLOUDFLARE_API_TOKEN` secret with the Workers deploy permissions for that account. The workflow does not need Turso credentials.
+
+For a manual dev release, run these commands from the `worker` directory:
 
 ```sh
 bun run test
