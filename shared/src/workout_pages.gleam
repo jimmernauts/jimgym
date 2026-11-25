@@ -231,7 +231,13 @@ fn view_nav(children: List(Element(a))) -> Element(a) {
         "col-[main-start_/_main-end] row-start-[footer] text-2xl p-4 border-t border-uchu-yin gap-6 flex justify-around flex-row",
       ),
     ],
-    [a([attribute.href("/"), class("self-center")], [text("Home")]), ..children],
+    [
+      a(
+        [attribute.href("/"), attribute.aria_label("Home"), class("self-center")],
+        [text("🏡")],
+      ),
+      ..children
+    ],
   )
 }
 
